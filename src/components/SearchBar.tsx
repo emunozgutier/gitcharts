@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import GitArchaeologyDisplay from './GitArchaeologyDisplay';
 
 interface GitHubRepo {
   id: number;
@@ -29,14 +28,13 @@ const SearchBar: React.FC<SearchBarProps> = ({ onSelect, initialValue = '', isMi
 
   // Sync internal selectedRepo with prop
   useEffect(() => {
-    if (initialValue) {
+    if (initialValue !== undefined) {
       setSelectedRepo(initialValue);
-      setQuery(initialValue);
+      setQuery(initialValue || '');
     }
   }, [initialValue]);
 
   const searchRepos = useCallback(async (searchTerm: string) => {
-    // Skip if selection just happened
     if (!searchTerm || searchTerm === lastSearched || searchTerm === selectedRepo) {
       if (!searchTerm) {
         setResults([]);
@@ -49,8 +47,6 @@ const SearchBar: React.FC<SearchBarProps> = ({ onSelect, initialValue = '', isMi
     setError(null);
     setHadNoResults(false);
     setLastSearched(searchTerm);
-    // Note: We don't clear selectedRepo here to avoid flickering logic in App.tsx
-    // unless the query significantly changes from the selection.
 
     try {
       const response = await fetch(
@@ -116,6 +112,11 @@ const SearchBar: React.FC<SearchBarProps> = ({ onSelect, initialValue = '', isMi
       </div>
 
       {error && <div className="alert alert-danger mt-2 py-2 small">{error}</div>}
+      {!loading && hadNoResults && query && (
+          <div className="list-group position-absolute w-100 mt-1 shadow" style={{ zIndex: 1050 }}>
+            <div className="list-group-item text-center text-muted py-2 small">No repositories found.</div>
+          </div>
+      )}
 
       {results.length > 0 && (
         <div className="search-results-overlay list-group shadow position-absolute w-100 mt-1" style={{ zIndex: 1050 }}>
@@ -138,23 +139,6 @@ const SearchBar: React.FC<SearchBarProps> = ({ onSelect, initialValue = '', isMi
           ))}
         </div>
       )}
-
-      {selectedRepo && !query.includes('/') && query !== '' && !loading && (
-        <button className="btn btn-sm btn-link text-muted mt-1 p-0" onClick={() => { setQuery(''); onSelect(null); setSelectedRepo(null); }}>
-          Clear Selection
-        </button>
-      )}
-
-      {/* Display is shown below the search bar if selected */}
-      {selectedRepo && !isMinimal && (
-         <div className="mt-4">
-           <GitArchaeologyDisplay repoFullName={selectedRepo} />
-         </div>
-      )}
-      
-      {/* If minimal (in navbar), we probably want the display in the main App area 
-          but for simplicity right now let's use a portal or just render it in App.tsx 
-          Actually, let's keep the display logic in App.tsx if it's selected */}
 
       <style>{`
         .search-bar-wrapper { position: relative; }

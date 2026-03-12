@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import './App.css'
 import SearchBar from './components/SearchBar'
+import GitArchaeologyDisplay from './components/GitArchaeologyDisplay'
 
 function App() {
   const [selectedRepo, setSelectedRepo] = useState<string | null>(null);
@@ -22,7 +23,7 @@ function App() {
       ) : (
         <nav className="navbar navbar-expand-lg navbar-dark bg-dark sticky-top shadow-sm py-2 mb-4">
           <div className="container-fluid px-4 d-flex align-items-center justify-content-between">
-            <a className="navbar-brand fw-bold mb-0 h1" href="#" onClick={() => setSelectedRepo(null)}>
+            <a className="navbar-brand fw-bold mb-0 h1" href="#" onClick={() => setSelectedRepo(null)} style={{ cursor: 'pointer' }}>
               GitCharts <span className="text-primary">Archaeology</span>
             </a>
             <div className="flex-grow-1 mx-4" style={{ maxWidth: '600px' }}>
@@ -30,7 +31,7 @@ function App() {
             </div>
             <div className="text-light d-none d-md-block">
               <span className="badge bg-primary rounded-pill px-3 py-2">
-                Repo: {selectedRepo}
+                {selectedRepo}
               </span>
             </div>
           </div>
@@ -41,7 +42,7 @@ function App() {
         {selectedRepo && (
           <div className="row justify-content-center">
             <div className="col-lg-10">
-              <SearchBar onSelect={setSelectedRepo} initialValue={selectedRepo} isMinimal={false} />
+              <GitArchaeologyDisplay repoFullName={selectedRepo} />
             </div>
           </div>
         )}
@@ -56,7 +57,7 @@ function App() {
       <style>{`
         .app-container { min-height: 100vh; transition: all 0.3s ease; }
         .repo-selected { background-color: #f8f9fa; }
-        .navbar-brand { font-size: 1.25rem; }
+        .navbar-brand { font-size: 1.25rem; text-decoration: none; color: white !important; }
       `}</style>
     </div>
   )
