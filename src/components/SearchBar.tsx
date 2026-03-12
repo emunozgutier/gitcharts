@@ -12,16 +12,31 @@ interface GitHubRepo {
   html_url: string;
 }
 
-const SearchBar: React.FC = () => {
-  const [query, setQuery] = useState('');
+interface SearchBarProps {
+  onSelect: (repoFullName: string | null) => void;
+  initialValue?: string | null;
+  isMinimal?: boolean;
+}
+
+const SearchBar: React.FC<SearchBarProps> = ({ onSelect, initialValue = '', isMinimal = false }) => {
+  const [query, setQuery] = useState(initialValue || '');
   const [results, setResults] = useState<GitHubRepo[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastSearched, setLastSearched] = useState('');
   const [hadNoResults, setHadNoResults] = useState(false);
-  const [selectedRepo, setSelectedRepo] = useState<string | null>(null);
+  const [selectedRepo, setSelectedRepo] = useState<string | null>(initialValue);
+
+  // Sync internal selectedRepo with prop
+  useEffect(() => {
+    if (initialValue) {
+      setSelectedRepo(initialValue);
+      setQuery(initialValue);
+    }
+  }, [initialValue]);
 
   const searchRepos = useCallback(async (searchTerm: string) => {
+    // Skip if selection just happened
     if (!searchTerm || searchTerm === lastSearched || searchTerm === selectedRepo) {
       if (!searchTerm) {
         setResults([]);
@@ -34,7 +49,8 @@ const SearchBar: React.FC = () => {
     setError(null);
     setHadNoResults(false);
     setLastSearched(searchTerm);
-    setSelectedRepo(null);
+    // Note: We don't clear selectedRepo here to avoid flickering logic in App.tsx
+    // unless the query significantly changes from the selection.
 
     try {
       const response = await fetch(
@@ -42,11 +58,11 @@ const SearchBar: React.FC = () => {
       );
 
       if (response.status === 403) {
-        throw new Error('GitHub API rate limit exceeded. Please wait a minute and try again.');
+        throw new Error('Rate limit exceeded.');
       }
 
       if (!response.ok) {
-        throw new Error(`GitHub API error: ${response.statusText}`);
+        throw new Error(`API error: ${response.statusText}`);
       }
 
       const data = await response.json();
@@ -54,7 +70,7 @@ const SearchBar: React.FC = () => {
       setResults(items);
       setHadNoResults(items.length === 0);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred while fetching from GitHub.');
+      setError(err instanceof Error ? err.message : 'Error');
     } finally {
       setLoading(false);
     }
@@ -63,8 +79,7 @@ const SearchBar: React.FC = () => {
   useEffect(() => {
     const timer = setTimeout(() => {
       searchRepos(query);
-    }, 800);
-
+    }, 600);
     return () => clearTimeout(timer);
   }, [query, searchRepos]);
 
@@ -72,66 +87,79 @@ const SearchBar: React.FC = () => {
     return `https://${repo.owner.login.toLowerCase()}.github.io/${repo.name}/`;
   };
 
+  const handleSelect = (repo: GitHubRepo) => {
+    const name = repo.full_name;
+    setQuery(name);
+    setResults([]);
+    setLastSearched(name);
+    setHadNoResults(false);
+    setSelectedRepo(name);
+    onSelect(name);
+  };
+
   return (
-    <div className="search-bar-container my-4">
-      <div className="input-group mb-3">
-        <span className="input-group-text" id="basic-addon1">🔍</span>
+    <div className={`search-bar-wrapper ${isMinimal ? 'minimal' : ''}`}>
+      <div className={`input-group ${isMinimal ? 'input-group-sm' : 'input-group-lg'}`}>
+        <span className="input-group-text bg-white border-end-0">🔍</span>
         <input
           type="text"
-          className="form-control form-control-lg"
-          placeholder="Search repo or creator (e.g. koaning/gitcharts)"
+          className="form-control border-start-0"
+          placeholder="Search repository..."
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
-      </div>
-
-      {loading && <div className="text-center py-2 text-muted">Searching GitHub...</div>}
-      {error && <div className="alert alert-danger">{error}</div>}
-
-      <div className="list-group shadow-sm">
-        {results.map((repo) => {
-          const ghPagesUrl = getGithubPagesUrl(repo);
-          
-          const handleSelect = (e: React.MouseEvent) => {
-            if ((e.target as HTMLElement).closest('a')) return;
-            setQuery(repo.full_name);
-            setResults([]);
-            setLastSearched(repo.full_name);
-            setHadNoResults(false);
-            setSelectedRepo(repo.full_name);
-          };
-
-          return (
-            <div 
-              key={repo.id} 
-              className="list-group-item list-group-item-action d-flex align-items-center justify-content-between py-3"
-              onClick={handleSelect}
-              style={{ cursor: 'pointer' }}
-            >
-              <div className="d-flex align-items-center">
-                <img src={repo.owner.avatar_url} alt="" className="rounded-circle me-3" style={{ width: '40px', height: '40px' }} />
-                <div>
-                  <h6 className="mb-0 fw-bold">{repo.full_name}</h6>
-                  <small className="text-muted">Repository: {repo.html_url}</small>
-                </div>
-              </div>
-              <a href={ghPagesUrl} target="_blank" rel="noopener noreferrer" className="btn btn-sm btn-outline-primary rounded-pill px-3" onClick={e => e.stopPropagation()}>
-                GitHub Pages ↗
-              </a>
-            </div>
-          );
-        })}
-        {!loading && hadNoResults && query && (
-          <div className="list-group-item text-center text-muted">No repositories found.</div>
+        {loading && (
+          <span className="input-group-text bg-white border-start-0">
+            <div className="spinner-border spinner-border-sm text-primary" role="status"></div>
+          </span>
         )}
       </div>
 
-      {selectedRepo && <GitArchaeologyDisplay repoFullName={selectedRepo} />}
+      {error && <div className="alert alert-danger mt-2 py-2 small">{error}</div>}
+
+      {results.length > 0 && (
+        <div className="search-results-overlay list-group shadow position-absolute w-100 mt-1" style={{ zIndex: 1050 }}>
+          {results.map((repo) => (
+            <div 
+              key={repo.id} 
+              className="list-group-item list-group-item-action d-flex align-items-center justify-content-between py-2"
+              onClick={() => handleSelect(repo)}
+              style={{ cursor: 'pointer' }}
+            >
+              <div className="d-flex align-items-center overflow-hidden">
+                <img src={repo.owner.avatar_url} alt="" className="rounded-circle me-2" style={{ width: '24px', height: '24px' }} />
+                <span className="text-truncate small fw-bold">{repo.full_name}</span>
+              </div>
+              <a href={getGithubPagesUrl(repo)} target="_blank" rel="noopener noreferrer" 
+                 className="btn btn-link btn-sm text-decoration-none p-0 ms-2" onClick={e => e.stopPropagation()}>
+                ↗
+              </a>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {selectedRepo && !query.includes('/') && query !== '' && !loading && (
+        <button className="btn btn-sm btn-link text-muted mt-1 p-0" onClick={() => { setQuery(''); onSelect(null); setSelectedRepo(null); }}>
+          Clear Selection
+        </button>
+      )}
+
+      {/* Display is shown below the search bar if selected */}
+      {selectedRepo && !isMinimal && (
+         <div className="mt-4">
+           <GitArchaeologyDisplay repoFullName={selectedRepo} />
+         </div>
+      )}
+      
+      {/* If minimal (in navbar), we probably want the display in the main App area 
+          but for simplicity right now let's use a portal or just render it in App.tsx 
+          Actually, let's keep the display logic in App.tsx if it's selected */}
 
       <style>{`
-        .search-bar-container { max-width: 800px; margin: 0 auto; }
-        .list-group-item { transition: transform 0.1s; }
-        .list-group-item:hover { transform: translateY(-2px); box-shadow: 0 4px 6px rgba(0,0,0,0.1); z-index: 1; }
+        .search-bar-wrapper { position: relative; }
+        .minimal { max-width: 100% !important; }
+        .search-results-overlay { max-height: 300px; overflow-y: auto; }
       `}</style>
     </div>
   );
