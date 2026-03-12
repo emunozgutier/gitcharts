@@ -13,6 +13,10 @@ interface GitHubRepo {
 }
 
 const SearchBar: React.FC = () => {
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState<GitHubRepo[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [lastSearched, setLastSearched] = useState('');
 
   const searchRepos = useCallback(async (searchTerm: string) => {
