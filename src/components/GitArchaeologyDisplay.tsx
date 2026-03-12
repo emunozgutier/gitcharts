@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { GitArchaeology, type BlameDataPoint } from './git_archeology';
+import { GitArchaeology, type BlameDataPoint } from './GitProcessing';
 import embed from 'vega-embed';
 
 interface GitArchaeologyDisplayProps {
@@ -46,7 +46,7 @@ const GitArchaeologyDisplay: React.FC<GitArchaeologyDisplayProps> = ({
         setStats(currentStats);
 
         const archaeology = new GitArchaeology(repoFullName);
-        const results = await archaeology.runLegacy((msg) => setProgress(msg));
+        const results = await archaeology.run((msg) => setProgress(msg));
         
         setData(results);
         setProgress(null);
