@@ -49,7 +49,7 @@ export interface CloneOptions {
  * Creates the target directory if it doesn't already exist.
  */
 export async function cloneRepo(opts: CloneOptions): Promise<void> {
-  const { dir, repoUrl, depth = 25, onProgress } = opts;
+  const { dir, repoUrl, depth = 100, onProgress } = opts;
 
   try {
     await pfs.mkdir(dir);
@@ -88,7 +88,7 @@ export interface CommitEntry {
 /**
  * Returns the last `depth` commits for the checked-out branch.
  */
-export async function readCommitLog(dir: string, depth = 10): Promise<CommitEntry[]> {
+export async function readCommitLog(dir: string, depth = 50): Promise<CommitEntry[]> {
   const commits = await git.log({ fs, dir, depth });
   return commits.map((c) => ({
     oid: c.oid,
@@ -114,15 +114,40 @@ export async function listSourceFiles(dir: string, oid: string): Promise<string[
 /**
  * Reads the raw text content of `filepath` at commit `oid`.
  * Returns `null` if the file is not found in the commit tree.
+ *
+ * NOTE: We resolve the blob by walking the tree segment-by-segment.
+ * `git.readTree({ oid })` only returns *root-level* entries, so a path like
+ * "src/index.js" would never be found with a flat `tree.find()`. Instead we
+ * traverse each path component through the tree manually.
  */
 export async function readFileAtCommit(
   dir: string,
-  oid: string,
+  commitOid: string,
   filepath: string
 ): Promise<string | null> {
-  const { tree } = await git.readTree({ fs, dir, oid });
-  const entry = tree.find((e) => e.path === filepath);
-  if (!entry) return null;
-  const { blob } = await git.readBlob({ fs, dir, oid: entry.oid });
-  return new TextDecoder().decode(blob);
+  try {
+    // Start at the commit's root tree
+    const { commit } = await git.readCommit({ fs, dir, oid: commitOid });
+    let currentOid = commit.tree; // root tree OID
+
+    const parts = filepath.split('/');
+    for (let i = 0; i < parts.length; i++) {
+      const part = parts[i];
+      const { tree } = await git.readTree({ fs, dir, oid: currentOid });
+      const entry = tree.find((e) => e.path === part);
+      if (!entry) return null;
+
+      if (i === parts.length - 1) {
+        // Last segment — should be a blob
+        const { blob } = await git.readBlob({ fs, dir, oid: entry.oid });
+        return new TextDecoder().decode(blob);
+      } else {
+        // Intermediate segment — descend into subtree
+        currentOid = entry.oid;
+      }
+    }
+    return null;
+  } catch {
+    return null;
+  }
 }

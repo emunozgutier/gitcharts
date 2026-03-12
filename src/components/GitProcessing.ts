@@ -154,7 +154,7 @@ export class GitArchaeology {
         30_000,
         `Listing files at ${commit.oid.substring(0, 7)}`
       );
-      const sampledFiles = files.slice(0, 3);
+      const sampledFiles = files.slice(0, 5);
 
       const periodCounts: Record<string, number> = {};
 
