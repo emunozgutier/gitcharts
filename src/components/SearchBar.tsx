@@ -85,8 +85,23 @@ const SearchBar: React.FC = () => {
       <div className="list-group shadow-sm">
         {results.map((repo) => {
           const ghPagesUrl = getGithubPagesUrl(repo);
+          
+          const handleSelect = (e: React.MouseEvent) => {
+            // Prevent navigating to the GitHub Pages link when selecting the repo
+            if ((e.target as HTMLElement).closest('a')) return;
+            
+            setQuery(repo.full_name);
+            setResults([]);
+            setLastSearched(repo.full_name);
+          };
+
           return (
-            <div key={repo.id} className="list-group-item list-group-item-action d-flex align-items-center justify-content-between py-3">
+            <div 
+              key={repo.id} 
+              className="list-group-item list-group-item-action d-flex align-items-center justify-content-between py-3 cursor-pointer"
+              onClick={handleSelect}
+              style={{ cursor: 'pointer' }}
+            >
               <div className="d-flex align-items-center">
                 <img 
                   src={repo.owner.avatar_url} 
@@ -105,6 +120,7 @@ const SearchBar: React.FC = () => {
                   target="_blank" 
                   rel="noopener noreferrer" 
                   className="btn btn-sm btn-outline-primary rounded-pill px-3"
+                  onClick={(e) => e.stopPropagation()}
                 >
                   GitHub Pages ↗
                 </a>
