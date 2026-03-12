@@ -16,7 +16,7 @@ const GitArchaeologyDisplay: React.FC<GitArchaeologyDisplayProps> = ({ repoFullN
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
-      setProgress("Fetching repository metadata...");
+      setProgress("Connecting to GitHub...");
       setData([]);
       
       try {
@@ -49,80 +49,109 @@ const GitArchaeologyDisplay: React.FC<GitArchaeologyDisplayProps> = ({ repoFullN
       const spec: any = {
         $schema: 'https://vega.github.io/schema/vega-lite/v5.json',
         width: 'container',
-        height: 'container', // Make chart fill available height
+        height: 'container',
         autosize: { type: 'fit', contains: 'padding' },
         data: { values: data },
-        mark: { type: 'area', line: true, tooltip: true },
+        mark: { type: 'area', line: { color: '#fff', strokeWidth: 0.5 }, tooltip: true },
         encoding: {
           x: {
             field: 'commit_date',
-            type: 'nominal',
+            type: 'temporal',
             title: null,
-            axis: { labelAngle: -45, grid: false }
+            axis: { format: '%Y-%m', grid: false, labelColor: '#6e7781' }
           },
           y: {
             field: 'line_count',
             type: 'quantitative',
             title: 'Lines of Code',
             stack: 'zero',
-            axis: { grid: true, gridOpacity: 0.1 }
+            axis: { grid: true, gridOpacity: 0.1, labelColor: '#6e7781' }
           },
           color: {
             field: 'period',
             type: 'nominal',
-            title: 'Period Added',
-            scale: { scheme: 'viridis' },
-            sort: 'descending' // 2024 top, 2020 bottom of legend
+            title: 'Quarter Added',
+            scale: { scheme: 'magma' },
+            sort: 'descending',
+            legend: { 
+              orient: 'right', 
+              offset: 20,
+              titleFontSize: 12,
+              labelFontSize: 10,
+              symbolType: 'square'
+            }
           },
           order: {
              field: 'period',
-             sort: 'ascending' // 2020 bottom of stack
+             sort: 'ascending'
           },
           tooltip: [
-            { field: 'commit_date', title: 'Snapshot' },
+            { field: 'commit_date', title: 'Snapshot', type: 'temporal', format: '%b %Y' },
             { field: 'period', title: 'Code from' },
             { field: 'line_count', title: 'Lines', format: ',' }
           ]
         },
         config: {
           view: { stroke: null },
-          axis: { labelFontSize: 10, titleFontSize: 12 }
+          font: 'Outfit, sans-serif'
         }
       };
 
-      embed(chartRef.current, spec, { actions: false, theme: 'fivethirtyeight' }).catch(console.error);
+      embed(chartRef.current, spec, { actions: false }).catch(console.error);
     }
   }, [data]);
 
   return (
     <div className="d-flex flex-column h-100 w-100">
-      <div className="d-flex justify-content-between align-items-center mb-3">
-        <h4 className="mb-0 fw-bold">{repoFullName} archaeology</h4>
-        <div className="d-flex gap-3">
-          {stats && (
+      <div className="d-flex justify-content-between align-items-center mb-1">
+        <div className="stats-card d-flex gap-4">
+          {stats ? (
             <>
-              <div className="small"><span className="text-muted">Size:</span> {Math.round(stats.size / 1024)}MB</div>
-              <div className="small"><span className="text-muted">Lang:</span> {stats.language}</div>
-              <div className="small"><span className="text-muted">Forks:</span> {stats.forks}</div>
+              <div>
+                <div className="text-muted small text-uppercase fw-bold ls-1">Size</div>
+                <div className="h5 mb-0 fw-bold">{Math.round(stats.size / 1024)} MB</div>
+              </div>
+              <div className="vr"></div>
+              <div>
+                <div className="text-muted small text-uppercase fw-bold ls-1">Language</div>
+                <div className="h5 mb-0 fw-bold">{stats.language || 'N/A'}</div>
+              </div>
+              <div className="vr"></div>
+              <div>
+                <div className="text-muted small text-uppercase fw-bold ls-1">Forks</div>
+                <div className="h5 mb-0 fw-bold">{stats.forks.toLocaleString()}</div>
+              </div>
             </>
+          ) : (
+            <div className="text-muted">Loading repository statistics...</div>
           )}
+        </div>
+        <div className="d-flex gap-2">
+           <button className="btn btn-sm btn-outline-secondary rounded-pill px-3 fw-bold">Clean</button>
+           <button className="btn btn-sm btn-light rounded-pill px-3 fw-bold border">Versioned</button>
         </div>
       </div>
 
-      <div className="flex-grow-1 bg-white rounded-3 shadow-sm border p-3 chart-wrapper position-relative">
+      <div className="chart-section position-relative">
         {progress && (
-          <div className="position-absolute top-50 start-50 translate-middle text-center">
-            <div className="spinner-border text-primary mb-2" role="status"></div>
-            <div className="text-muted small">{progress}</div>
+          <div className="position-absolute top-50 start-50 translate-middle text-center w-75">
+            <div className="spinner-grow text-primary mb-3" role="status"></div>
+            <div className="h4 fw-bold mb-2">{progress}</div>
+            <div className="progress" style={{ height: '4px' }}>
+              <div className="progress-bar progress-bar-striped progress-bar-animated" style={{ width: '100%' }}></div>
+            </div>
+            <p className="mt-3 text-muted">Analyzing git history directly in your browser. Large repos may take a minute.</p>
           </div>
         )}
         
-        <div ref={chartRef} className="w-100 h-100" style={{ minHeight: '300px' }}></div>
+        <div className="chart-wrapper">
+          <div ref={chartRef} className="w-100 h-100"></div>
+        </div>
       </div>
       
-      <div className="d-flex justify-content-between align-items-center mt-2 px-1">
-        <small className="text-muted">Older code is stacked at the bottom (sediment).</small>
-        {loading && <small className="text-primary fw-bold">Updating...</small>}
+      <div className="d-flex justify-content-between align-items-center mt-3 px-1 text-muted small">
+        <span>Showing code age distribution across sampled commits.</span>
+        {loading && <div className="d-flex align-items-center gap-2"><div className="spinner-border spinner-border-sm text-primary"></div><span>Syncing...</span></div>}
       </div>
     </div>
   );
