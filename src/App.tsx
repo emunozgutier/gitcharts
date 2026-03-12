@@ -1,34 +1,24 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
 import './App.css'
+import SearchBar from './components/SearchBar'
 
 function App() {
-  const [count, setCount] = useState(0)
-
   return (
-    <>
-      <div>
-        <a href="https://vite.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.tsx</code> and save to test HMR
+    <div className="container py-5">
+      <header className="text-center mb-5">
+        <h1 className="display-4 fw-bold">GitCharts Archaeology</h1>
+        <p className="lead text-muted">
+          Search for a GitHub repository to explore its history and code age distribution.
         </p>
-      </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
-    </>
+      </header>
+
+      <main>
+        <SearchBar />
+      </main>
+
+      <footer className="text-center mt-5 pt-4 border-top text-muted">
+        <p>Built with Vite + React + GitHub API</p>
+      </footer>
+    </div>
   )
 }
 
