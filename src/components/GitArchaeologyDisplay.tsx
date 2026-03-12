@@ -17,7 +17,7 @@ const GitArchaeologyDisplay: React.FC<GitArchaeologyDisplayProps> = ({ repoFullN
     const fetchData = async () => {
       setLoading(true);
       setProgress("Fetching repository metadata...");
-      setData([]); // Reset on new repo
+      setData([]);
       
       try {
         const repoRes = await fetch(`https://api.github.com/repos/${repoFullName}`);
@@ -45,100 +45,84 @@ const GitArchaeologyDisplay: React.FC<GitArchaeologyDisplayProps> = ({ repoFullN
   }, [repoFullName]);
 
   useEffect(() => {
-    // Only embed if we have data AND the ref is ready
     if (data.length > 0 && chartRef.current) {
-      console.log('GitArchaeologyDisplay: Embedding chart...');
       const spec: any = {
         $schema: 'https://vega.github.io/schema/vega-lite/v5.json',
-        title: 'Code Archaeology: Lines of Code by Period Added',
         width: 'container',
-        height: 400,
+        height: 'container', // Make chart fill available height
+        autosize: { type: 'fit', contains: 'padding' },
         data: { values: data },
-        mark: 'area',
+        mark: { type: 'area', line: true, tooltip: true },
         encoding: {
           x: {
             field: 'commit_date',
             type: 'nominal',
-            title: 'Commit Timeline',
-            axis: { labelAngle: -45 }
+            title: null,
+            axis: { labelAngle: -45, grid: false }
           },
           y: {
             field: 'line_count',
             type: 'quantitative',
             title: 'Lines of Code',
-            stack: 'zero'
+            stack: 'zero',
+            axis: { grid: true, gridOpacity: 0.1 }
           },
           color: {
             field: 'period',
             type: 'nominal',
             title: 'Period Added',
-            scale: { scheme: 'viridis' }
+            scale: { scheme: 'viridis' },
+            sort: 'descending' // 2024 top, 2020 bottom of legend
+          },
+          order: {
+             field: 'period',
+             sort: 'ascending' // 2020 bottom of stack
           },
           tooltip: [
             { field: 'commit_date', title: 'Snapshot' },
-            { field: 'period', title: 'Added in' },
-            { field: 'line_count', title: 'Lines' }
+            { field: 'period', title: 'Code from' },
+            { field: 'line_count', title: 'Lines', format: ',' }
           ]
+        },
+        config: {
+          view: { stroke: null },
+          axis: { labelFontSize: 10, titleFontSize: 12 }
         }
       };
 
-      embed(chartRef.current, spec, { actions: false }).catch(err => {
-        console.error('Vega-Lite embedding failed:', err);
-      });
+      embed(chartRef.current, spec, { actions: false, theme: 'fivethirtyeight' }).catch(console.error);
     }
-  }, [data, progress]); // Re-run when data is ready or progress is cleared (releasing the div)
+  }, [data]);
 
   return (
-    <div className="card shadow-sm border-0 rounded-4 overflow-hidden mt-2 mb-5">
-      <div className="card-header bg-dark text-white p-3 d-flex justify-content-between align-items-center">
-        <h5 className="mb-0">Archaeology Report: {repoFullName}</h5>
-        {loading && <div className="spinner-border spinner-border-sm text-light" role="status"></div>}
+    <div className="d-flex flex-column h-100 w-100">
+      <div className="d-flex justify-content-between align-items-center mb-3">
+        <h4 className="mb-0 fw-bold">{repoFullName} archaeology</h4>
+        <div className="d-flex gap-3">
+          {stats && (
+            <>
+              <div className="small"><span className="text-muted">Size:</span> {Math.round(stats.size / 1024)}MB</div>
+              <div className="small"><span className="text-muted">Lang:</span> {stats.language}</div>
+              <div className="small"><span className="text-muted">Forks:</span> {stats.forks}</div>
+            </>
+          )}
+        </div>
       </div>
-      <div className="card-body p-4">
-        {stats && (
-          <div className="row mb-4 g-3">
-            <div className="col-md-4">
-              <div className="p-3 bg-light rounded-3 text-center border">
-                <small className="text-muted d-block text-uppercase fw-bold">Size</small>
-                <span className="h4">{Math.round(stats.size / 1024)} MB</span>
-              </div>
-            </div>
-            <div className="col-md-4">
-              <div className="p-3 bg-light rounded-3 text-center border">
-                <small className="text-muted d-block text-uppercase fw-bold">Primary Language</small>
-                <span className="h4">{stats.language || 'Unknown'}</span>
-              </div>
-            </div>
-            <div className="col-md-4">
-              <div className="p-3 bg-light rounded-3 text-center border">
-                <small className="text-muted d-block text-uppercase fw-bold">Forks</small>
-                <span className="h4">{stats.forks}</span>
-              </div>
-            </div>
-          </div>
-        )}
 
+      <div className="flex-grow-1 bg-white rounded-3 shadow-sm border p-3 chart-wrapper position-relative">
         {progress && (
-          <div className="text-center py-5">
-            <div className="spinner-border text-primary mb-3" role="status">
-              <span className="visually-hidden">Loading...</span>
-            </div>
-            <p className="lead text-muted">{progress}</p>
+          <div className="position-absolute top-50 start-50 translate-middle text-center">
+            <div className="spinner-border text-primary mb-2" role="status"></div>
+            <div className="text-muted small">{progress}</div>
           </div>
         )}
-
-        {data.length > 0 && !progress && (
-          <div className="chart-container">
-            <div ref={chartRef} style={{ width: '100%', minHeight: '400px' }}></div>
-            <div className="text-end mt-2">
-               <small className="text-muted">Interactive Vega-Lite Visualization</small>
-            </div>
-          </div>
-        )}
-
-        {!loading && !progress && data.length === 0 && (
-          <div className="alert alert-info border-0 bg-light">No archaeology data available for this repository.</div>
-        )}
+        
+        <div ref={chartRef} className="w-100 h-100" style={{ minHeight: '300px' }}></div>
+      </div>
+      
+      <div className="d-flex justify-content-between align-items-center mt-2 px-1">
+        <small className="text-muted">Older code is stacked at the bottom (sediment).</small>
+        {loading && <small className="text-primary fw-bold">Updating...</small>}
       </div>
     </div>
   );
