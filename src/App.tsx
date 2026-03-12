@@ -2,6 +2,7 @@ import './App.css'
 import SearchBar from './components/SearchBar'
 
 function App() {
+  console.log('App: Rendering component...');
   return (
     <div className="container py-5">
       <header className="text-center mb-5">
