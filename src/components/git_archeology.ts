@@ -11,6 +11,19 @@ export interface BlameDataPoint {
   line_count: number;
 }
 
+/**
+ * Helper to wrap a promise in a timeout
+ */
+async function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
+  let timeoutId: any;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => reject(new Error(`Timeout: ${message}`)), ms);
+  });
+  const result = await Promise.race([promise, timeoutPromise]);
+  clearTimeout(timeoutId);
+  return result;
+}
+
 export class GitArchaeology {
   public repoUrl: string;
   public dir: string;
@@ -27,42 +40,47 @@ export class GitArchaeology {
     return `${year}-Q${quarter}`;
   }
 
+  /**
+   * Run the archaeology process (Real analysis with line attribution)
+   */
   async runLegacy(onProgress?: (progress: string) => void): Promise<BlameDataPoint[]> {
     try {
-      if (onProgress) onProgress("Initializing filesystem...");
+      if (onProgress) onProgress("Initializing local filesystem...");
       try {
         await pfs.mkdir(this.dir);
       } catch (e) {
         // Directory might already exist
       }
 
-      if (onProgress) onProgress(`Cloning ${this.repoUrl} (this may take a while)...`);
-      await git.clone({
-        fs,
-        http,
-        dir: this.dir,
-        url: this.repoUrl,
-        corsProxy: 'https://cors.isomorphic-git.org',
-        singleBranch: true,
-        depth: 25, 
-        onProgress: (p) => {
-          if (onProgress && p.phase) {
-            onProgress(`Cloning: ${p.phase} ${p.loaded}/${p.total || '?'}`);
+      if (onProgress) onProgress(`Connecting to GitHub (cloning index)...`);
+      await withTimeout(
+        git.clone({
+          fs,
+          http,
+          dir: this.dir,
+          url: this.repoUrl,
+          corsProxy: 'https://cors.isomorphic-git.org',
+          singleBranch: true,
+          depth: 25, 
+          onProgress: (p) => {
+            if (onProgress && p.phase) {
+              onProgress(`Cloning: ${p.phase} (${Math.round((p.loaded / (p.total || 1)) * 100)}%)`);
+            }
           }
-        }
-      });
+        }),
+        120000, // 2 minute timeout for clone
+        "Cloning repository"
+      );
 
       if (onProgress) onProgress("Reading commit history...");
       const commits = await git.log({
         fs,
         dir: this.dir,
-        depth: 10 // Smaller sample for faster browser processing
+        depth: 10 // Analyze last 10 commits to show evolution
       });
 
       if (onProgress) onProgress(`Analyzing ${commits.length} commits...`);
       const data: BlameDataPoint[] = [];
-
-      // Cache for commit dates to avoid multiple readCommit calls
       const commitDateCache: Record<string, string> = {};
 
       for (let i = 0; i < commits.length; i++) {
@@ -73,22 +91,21 @@ export class GitArchaeology {
         
         if (onProgress) onProgress(`Analyzing snapshot ${i + 1}/${commits.length}: ${oid.substring(0, 7)}...`);
 
+        // Get file list at this commit
         const files = (await git.listFiles({ fs, dir: this.dir, ref: oid }))
-          .filter(f => /\.(py|js|ts|tsx|java)$/.test(f)); // Focus on high-value files
+          .filter(f => /\.(py|js|ts|tsx|java)$/.test(f));
 
         const periodCounts: Record<string, number> = {};
-        const sampledFiles = files.slice(0, 4); // Aggressive sampling for performance
+        const sampledFiles = files.slice(0, 3); // Heavily sampled for speed
 
         for (const filepath of sampledFiles) {
           try {
-            // Use isomorphic-git blame if available, otherwise fallback
-            // We use (git as any) to bypass potential type mismatch
-            const blameResults = await (git as any).blame({
-              fs,
-              dir: this.dir,
-              ref: oid,
-              filepath
-            });
+            // Check if blame is available on the git object
+            const blameResults = await withTimeout(
+              (git as any).blame({ fs, dir: this.dir, ref: oid, filepath }),
+              15000, // 15s per file blame
+              `Blaming ${filepath}`
+            );
 
             for (const line of blameResults) {
               const originOid = line.commitId;
@@ -104,13 +121,13 @@ export class GitArchaeology {
               periodCounts[originPeriod] = (periodCounts[originPeriod] || 0) + 1;
             }
           } catch (e) {
-            // Fallback: Attribute all lines to current period if blame fails
+            // Fallback: use file content as a single block
             try {
                const { blob } = await git.readBlob({ fs, dir: this.dir, oid: (await git.readTree({ fs, dir: this.dir, oid })).tree.find(e => e.path === filepath)?.oid || '' });
                const content = new TextDecoder().decode(blob);
                const lineCount = content.split('\n').length;
                const currentPeriod = this.getPeriod(commitDate);
-               periodCounts[currentPeriod] = (periodCounts[currentPeriod] || 0) + lineCount;
+               periodCounts[currentPeriod] = (currentPeriod || 0) + lineCount;
             } catch (innerE) {
                console.error(`Analysis failed for ${filepath}`, innerE);
             }

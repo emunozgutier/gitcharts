@@ -5,6 +5,11 @@ import GitArchaeologyDisplay from './components/GitArchaeologyDisplay'
 
 function App() {
   const [selectedRepo, setSelectedRepo] = useState<string | null>(null);
+  const [repoCache, setRepoCache] = useState<Record<string, { stats: any; data: any[] }>>({});
+
+  const updateCache = (repo: string, stats: any, data: any[]) => {
+    setRepoCache(prev => ({ ...prev, [repo]: { stats, data } }));
+  };
 
   return (
     <div className={`app-container ${selectedRepo ? 'repo-selected' : ''}`}>
@@ -41,7 +46,11 @@ function App() {
           </nav>
           
           <main className="main-content p-3 container-wide">
-            <GitArchaeologyDisplay repoFullName={selectedRepo} />
+            <GitArchaeologyDisplay 
+              repoFullName={selectedRepo} 
+              cachedResult={repoCache[selectedRepo]}
+              onAnalysisComplete={(stats: any, data: any[]) => updateCache(selectedRepo, stats, data)}
+            />
           </main>
         </>
       )}

@@ -4,37 +4,58 @@ import embed from 'vega-embed';
 
 interface GitArchaeologyDisplayProps {
   repoFullName: string;
+  cachedResult?: { stats: any; data: BlameDataPoint[] };
+  onAnalysisComplete?: (stats: any, data: BlameDataPoint[]) => void;
 }
 
-const GitArchaeologyDisplay: React.FC<GitArchaeologyDisplayProps> = ({ repoFullName }) => {
-  const [stats, setStats] = useState<{ size: number; language: string; forks: number } | null>(null);
+const GitArchaeologyDisplay: React.FC<GitArchaeologyDisplayProps> = ({ 
+  repoFullName, 
+  cachedResult, 
+  onAnalysisComplete 
+}) => {
+  const [stats, setStats] = useState<{ size: number; language: string; forks: number } | null>(cachedResult?.stats || null);
   const [progress, setProgress] = useState<string | null>(null);
-  const [data, setData] = useState<BlameDataPoint[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState<BlameDataPoint[]>(cachedResult?.data || []);
+  const [loading, setLoading] = useState(!cachedResult);
   const chartRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    if (cachedResult) {
+      setStats(cachedResult.stats);
+      setData(cachedResult.data);
+      setLoading(false);
+      setProgress(null);
+      return;
+    }
+
     const fetchData = async () => {
       setLoading(true);
-      setProgress("Connecting to GitHub...");
+      setProgress("Connecting to GitHub API...");
       setData([]);
       
       try {
         const repoRes = await fetch(`https://api.github.com/repos/${repoFullName}`);
+        if (!repoRes.ok) throw new Error("Failed to fetch repo metadata");
         const repoData = await repoRes.json();
-        setStats({
+        
+        const currentStats = {
           size: repoData.size,
           language: repoData.language,
           forks: repoData.forks_count
-        });
+        };
+        setStats(currentStats);
 
         const archaeology = new GitArchaeology(repoFullName);
         const results = await archaeology.runLegacy((msg) => setProgress(msg));
         
         setData(results);
         setProgress(null);
-      } catch (err) {
-        setProgress("Error: Failed to perform archaeology.");
+        
+        if (onAnalysisComplete) {
+          onAnalysisComplete(currentStats, results);
+        }
+      } catch (err: any) {
+        setProgress(`Error: ${err.message || "Failed to perform archaeology"}. Check console for details.`);
         console.error(err);
       } finally {
         setLoading(false);
@@ -42,7 +63,7 @@ const GitArchaeologyDisplay: React.FC<GitArchaeologyDisplayProps> = ({ repoFullN
     };
 
     fetchData();
-  }, [repoFullName]);
+  }, [repoFullName, cachedResult]);
 
   useEffect(() => {
     if (data.length > 0 && chartRef.current) {
@@ -127,8 +148,8 @@ const GitArchaeologyDisplay: React.FC<GitArchaeologyDisplayProps> = ({ repoFullN
           )}
         </div>
         <div className="d-flex gap-2">
-           <button className="btn btn-sm btn-outline-secondary rounded-pill px-3 fw-bold">Clean</button>
-           <button className="btn btn-sm btn-light rounded-pill px-3 fw-bold border">Versioned</button>
+           <button className="btn btn-sm btn-outline-secondary rounded-pill px-3 fw-bold" onClick={() => window.location.reload()}>Refresh</button>
+           <button className="btn btn-sm btn-primary rounded-pill px-3 fw-bold border" style={{ display: cachedResult ? 'inline-block' : 'none' }}>Cached</button>
         </div>
       </div>
 
@@ -140,7 +161,6 @@ const GitArchaeologyDisplay: React.FC<GitArchaeologyDisplayProps> = ({ repoFullN
             <div className="progress" style={{ height: '4px' }}>
               <div className="progress-bar progress-bar-striped progress-bar-animated" style={{ width: '100%' }}></div>
             </div>
-            <p className="mt-3 text-muted">Analyzing git history directly in your browser. Large repos may take a minute.</p>
           </div>
         )}
         
@@ -150,8 +170,8 @@ const GitArchaeologyDisplay: React.FC<GitArchaeologyDisplayProps> = ({ repoFullN
       </div>
       
       <div className="d-flex justify-content-between align-items-center mt-3 px-1 text-muted small">
-        <span>Showing code age distribution across sampled commits.</span>
-        {loading && <div className="d-flex align-items-center gap-2"><div className="spinner-border spinner-border-sm text-primary"></div><span>Syncing...</span></div>}
+        <span>Showing real code age distribution. Older layers (sediment) at the bottom.</span>
+        {loading && <div className="d-flex align-items-center gap-2"><div className="spinner-border spinner-border-sm text-primary"></div><span>Syncing history...</span></div>}
       </div>
     </div>
   );
