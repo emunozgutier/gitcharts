@@ -101,7 +101,7 @@ export class GitArchaeology {
         for (const filepath of sampledFiles) {
           try {
             // Check if blame is available on the git object
-            const blameResults = await withTimeout(
+            const blameResults = await withTimeout<any[]>(
               (git as any).blame({ fs, dir: this.dir, ref: oid, filepath }),
               15000, // 15s per file blame
               `Blaming ${filepath}`
@@ -118,16 +118,20 @@ export class GitArchaeology {
                 commitDateCache[originOid] = originPeriod;
               }
               
-              periodCounts[originPeriod] = (periodCounts[originPeriod] || 0) + 1;
+              periodCounts[originPeriod] = (Number(periodCounts[originPeriod]) || 0) + 1;
             }
           } catch (e) {
             // Fallback: use file content as a single block
             try {
-               const { blob } = await git.readBlob({ fs, dir: this.dir, oid: (await git.readTree({ fs, dir: this.dir, oid })).tree.find(e => e.path === filepath)?.oid || '' });
-               const content = new TextDecoder().decode(blob);
-               const lineCount = content.split('\n').length;
-               const currentPeriod = this.getPeriod(commitDate);
-               periodCounts[currentPeriod] = (currentPeriod || 0) + lineCount;
+               const tree = (await git.readTree({ fs, dir: this.dir, oid })).tree;
+               const entry = tree.find(e => e.path === filepath);
+               if (entry) {
+                 const { blob } = await git.readBlob({ fs, dir: this.dir, oid: entry.oid });
+                 const content = new TextDecoder().decode(blob);
+                 const lineCount = content.split('\n').length;
+                 const currentPeriod = this.getPeriod(commitDate);
+                 periodCounts[currentPeriod] = (Number(periodCounts[currentPeriod]) || 0) + lineCount;
+               }
             } catch (innerE) {
                console.error(`Analysis failed for ${filepath}`, innerE);
             }
