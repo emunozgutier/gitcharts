@@ -1,22 +1,75 @@
-# gitcharts
+# React + TypeScript + Vite
 
-[![Open in molab](https://marimo.io/molab-shield.svg)](https://molab.marimo.io/github/koaning/gitcharts/blob/main/git_archaeology.py)
+This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 
-> A repository with some cool charts that tell us about the history of a git repo.
+Currently, two official plugins are available:
 
-<img width="1380" height="865" alt="CleanShot 2025-12-18 at 14 02 56" src="https://github.com/user-attachments/assets/93f5c5ff-3a79-4215-9c2c-7c31f71b21d8" />
+- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
+- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
 
-With charts like this you get an idea of how quickly code is rewritten in a repo. You can explore the GitHub pages link or the marimo notebook to learn more.
+## React Compiler
 
-## CLI Usage
+The React Compiler is enabled on this template. See [this documentation](https://react.dev/learn/react-compiler) for more information.
 
-You can also run `git_archaeology.py` as a command-line script:
+Note: This will impact Vite dev & build performances.
 
-```bash
-uv run git_archaeology.py --repo https://github.com/marimo-team/marimo --samples 50
+## Expanding the ESLint configuration
+
+If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+
+```js
+export default defineConfig([
+  globalIgnores(['dist']),
+  {
+    files: ['**/*.{ts,tsx}'],
+    extends: [
+      // Other configs...
+
+      // Remove tseslint.configs.recommended and replace with this
+      tseslint.configs.recommendedTypeChecked,
+      // Alternatively, use this for stricter rules
+      tseslint.configs.strictTypeChecked,
+      // Optionally, add this for stylistic rules
+      tseslint.configs.stylisticTypeChecked,
+
+      // Other configs...
+    ],
+    languageOptions: {
+      parserOptions: {
+        project: ['./tsconfig.node.json', './tsconfig.app.json'],
+        tsconfigRootDir: import.meta.dirname,
+      },
+      // other options...
+    },
+  },
+])
 ```
 
-**Arguments:**
+You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
 
-- `--repo` (required) — Repository URL (HTTPS)
-- `--samples` (optional, default: 100) — Number of commits to sample
+```js
+// eslint.config.js
+import reactX from 'eslint-plugin-react-x'
+import reactDom from 'eslint-plugin-react-dom'
+
+export default defineConfig([
+  globalIgnores(['dist']),
+  {
+    files: ['**/*.{ts,tsx}'],
+    extends: [
+      // Other configs...
+      // Enable lint rules for React
+      reactX.configs['recommended-typescript'],
+      // Enable lint rules for React DOM
+      reactDom.configs.recommended,
+    ],
+    languageOptions: {
+      parserOptions: {
+        project: ['./tsconfig.node.json', './tsconfig.app.json'],
+        tsconfigRootDir: import.meta.dirname,
+      },
+      // other options...
+    },
+  },
+])
+```
