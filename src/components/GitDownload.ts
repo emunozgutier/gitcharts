@@ -45,17 +45,38 @@ export interface CloneOptions {
 }
 
 /**
+ * Recursively deletes a directory (and all its contents) from lightning-fs.
+ * Silently ignores "not found" errors.
+ */
+async function rmrf(path: string): Promise<void> {
+  let stat: any;
+  try {
+    stat = await pfs.stat(path);
+  } catch {
+    return; // doesn't exist, nothing to do
+  }
+
+  if (stat.isDirectory()) {
+    const entries: string[] = await pfs.readdir(path);
+    await Promise.all(entries.map((e: string) => rmrf(`${path}/${e}`)));
+    await pfs.rmdir(path);
+  } else {
+    await pfs.unlink(path);
+  }
+}
+
+/**
  * Clones a repository (shallow) into the in-browser FS.
  * Creates the target directory if it doesn't already exist.
  */
 export async function cloneRepo(opts: CloneOptions): Promise<void> {
   const { dir, repoUrl, depth = 100, onProgress } = opts;
 
-  try {
-    await pfs.mkdir(dir);
-  } catch {
-    // Directory already exists – fine.
-  }
+  // Always wipe the previous clone so we never reuse stale git objects
+  // that were fetched before code fixes.
+  if (onProgress) onProgress('Clearing previous clone...');
+  await rmrf(dir);
+  await pfs.mkdir(dir);
 
   await withTimeout(
     git.clone({
@@ -73,7 +94,7 @@ export async function cloneRepo(opts: CloneOptions): Promise<void> {
         }
       },
     }),
-    120_000,
+    180_000, // 3 min – a deeper clone takes longer
     'Cloning repository'
   );
 }

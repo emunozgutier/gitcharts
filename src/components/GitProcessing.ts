@@ -123,15 +123,17 @@ export class GitArchaeology {
     await cloneRepo({
       dir: this.dir,
       repoUrl: this.repoUrl,
-      depth: 25,
+      // depth 100 gives enough objects to cover 50 commits
+      depth: 100,
       onProgress: (msg) => onProgress && onProgress(msg),
     });
 
     // ── 2. Commit log ───────────────────────────────────────────────────────
-    if (onProgress) onProgress('Reading commit history...');
-    const commits = await readCommitLog(this.dir, 10);
+    // Read 50 commits so we can span multiple quarters
+    const commits = await readCommitLog(this.dir, 50);
     // Work from oldest → newest for correct attribution
     const ordered = [...commits].reverse();
+    console.log(`[GitProcessing] Found ${ordered.length} commits to analyze.`);
 
     if (onProgress) onProgress(`Analyzing ${ordered.length} commits...`);
 
@@ -155,6 +157,7 @@ export class GitArchaeology {
         `Listing files at ${commit.oid.substring(0, 7)}`
       );
       const sampledFiles = files.slice(0, 5);
+      console.log(`[GitProcessing] commit ${commit.oid.substring(0,7)} (${commitPeriod}): ${files.length} source files, sampling ${sampledFiles.length}`);
 
       const periodCounts: Record<string, number> = {};
 
@@ -165,7 +168,10 @@ export class GitArchaeology {
             15_000,
             `Reading ${filepath} at ${commit.oid.substring(0, 7)}`
           );
-          if (newerContent === null) continue;
+          if (newerContent === null) {
+            console.warn(`[GitProcessing] readFileAtCommit returned null for ${filepath} @ ${commit.oid.substring(0,7)}`);
+            continue;
+          }
 
           // Fetch the previous snapshot for this file (if it exists)
           let olderContent: string | null = null;
@@ -199,6 +205,7 @@ export class GitArchaeology {
       }
     }
 
+    console.log(`[GitProcessing] Final data (${data.length} points):`, data);
     return data.sort((a, b) => a.commit_date.localeCompare(b.commit_date));
   }
 
