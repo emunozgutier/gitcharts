@@ -1,3 +1,5 @@
+import '../css/styles.css';
+
 // Application State
 const state = {
   repos: [], // Will be loaded from repos.json
@@ -76,7 +78,7 @@ async function loadChart(repo, variant) {
   }
 
   try {
-    const response = await fetch(`charts/${repo}-${variant}.json`);
+    const response = await fetch(`/charts/${repo}-${variant}.json`);
 
     if (!response.ok) {
       throw new Error(`Chart not found: ${response.status}`);
@@ -239,7 +241,7 @@ function onPopState() {
  */
 async function loadRepos() {
   try {
-    const response = await fetch("charts/repos.json");
+    const response = await fetch("/charts/repos.json");
     if (!response.ok) {
       throw new Error(`Failed to load repos: ${response.status}`);
     }
