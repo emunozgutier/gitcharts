@@ -23,7 +23,6 @@ const SearchBar: React.FC<SearchBarProps> = ({ onSelect, initialValue = '', isMi
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastSearched, setLastSearched] = useState('');
-  const [hadNoResults, setHadNoResults] = useState(false);
   const [selectedRepo, setSelectedRepo] = useState<string | null>(initialValue);
 
   // Sync internal selectedRepo with prop
@@ -38,14 +37,12 @@ const SearchBar: React.FC<SearchBarProps> = ({ onSelect, initialValue = '', isMi
     if (!searchTerm || searchTerm === lastSearched || searchTerm === selectedRepo) {
       if (!searchTerm) {
         setResults([]);
-        setHadNoResults(false);
       }
       return;
     }
 
     setLoading(true);
     setError(null);
-    setHadNoResults(false);
     setLastSearched(searchTerm);
 
     try {
@@ -64,7 +61,6 @@ const SearchBar: React.FC<SearchBarProps> = ({ onSelect, initialValue = '', isMi
       const data = await response.json();
       const items = data.items || [];
       setResults(items);
-      setHadNoResults(items.length === 0);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error');
     } finally {
@@ -88,7 +84,6 @@ const SearchBar: React.FC<SearchBarProps> = ({ onSelect, initialValue = '', isMi
     setQuery(name);
     setResults([]);
     setLastSearched(name);
-    setHadNoResults(false);
     setSelectedRepo(name);
     onSelect(name);
   };
@@ -112,7 +107,8 @@ const SearchBar: React.FC<SearchBarProps> = ({ onSelect, initialValue = '', isMi
       </div>
 
       {error && <div className="alert alert-danger mt-2 py-2 small">{error}</div>}
-      {!loading && hadNoResults && query && (
+      
+      {!loading && results.length === 0 && query && query.includes('/') && !selectedRepo && (
           <div className="list-group position-absolute w-100 mt-1 shadow" style={{ zIndex: 1050 }}>
             <div className="list-group-item text-center text-muted py-2 small">No repositories found.</div>
           </div>
