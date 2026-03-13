@@ -21,7 +21,11 @@ const GitArchaeologyDisplay: React.FC<GitArchaeologyDisplayProps> = ({
   const [state, setState] = useState<AnalysisState>(cachedResult ? 'DONE' : 'IDLE');
   const [progress, setProgress] = useState<string | null>(null);
   const [data, setData] = useState<BlameDataPoint[]>(cachedResult?.data || []);
-  const [repoInfo, setRepoInfo] = useState<{ extensions: Record<string, number>; folders: string[] } | null>(null);
+  const [repoInfo, setRepoInfo] = useState<{ 
+    extensions: Record<string, number>; 
+    folders: string[]; 
+    folderLines: Record<string, number>;
+  } | null>(null);
 
   const startInitialClone = useCallback(async () => {
     setState('CLONING');
@@ -40,8 +44,8 @@ const GitArchaeologyDisplay: React.FC<GitArchaeologyDisplayProps> = ({
       setStats(currentStats);
 
       const archaeology = new GitArchaeology(repoFullName);
-      // This will clone the repo
-      await archaeology.run((msg) => setProgress(msg), { extensions: [], folders: [] });
+      // step 1: download only
+      await archaeology.download((msg) => setProgress(msg));
       
       setProgress("Scanning repository structure...");
       const info = await archaeology.scanRepo();
@@ -66,7 +70,11 @@ const GitArchaeologyDisplay: React.FC<GitArchaeologyDisplayProps> = ({
     
     try {
       const archaeology = new GitArchaeology(repoFullName);
-      const results = await archaeology.run((msg) => setProgress(msg), { extensions, folders });
+      // step 2: run analysis on already downloaded repo
+      const results = await archaeology.run(
+        (msg) => setProgress(msg), 
+        { extensions, folders, skipClone: true }
+      );
       
       setData(results);
       setState('DONE');
@@ -94,6 +102,7 @@ const GitArchaeologyDisplay: React.FC<GitArchaeologyDisplayProps> = ({
           <GitSettings 
             extensions={repoInfo.extensions} 
             folders={repoInfo.folders} 
+            folderLines={repoInfo.folderLines}
             onAnalyze={handleStartAnalysis} 
           />
         )}

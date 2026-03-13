@@ -3,24 +3,32 @@ import React, { useState, useMemo } from 'react';
 interface GitSettingsProps {
   extensions: Record<string, number>;
   folders: string[];
+  folderLines: Record<string, number>;
   onAnalyze: (selectedExtensions: string[], selectedFolders: string[]) => void;
 }
 
-const GitSettings: React.FC<GitSettingsProps> = ({ extensions, folders, onAnalyze }) => {
+const GitSettings: React.FC<GitSettingsProps> = ({ extensions, folders, folderLines, onAnalyze }) => {
   const [selectedExtensions, setSelectedExtensions] = useState<string[]>([]);
   const [selectedFolders, setSelectedFolders] = useState<string[]>([]);
+
+  const totalLines = useMemo(() => 
+    Object.values(extensions).reduce((sum, count) => sum + count, 0), 
+  [extensions]);
 
   const topExtensions = useMemo(() => {
     const sorted = Object.entries(extensions)
       .sort(([, a], [, b]) => b - a)
       .slice(0, 5);
-    const total = Object.values(extensions).reduce((sum, count) => sum + count, 0);
     return sorted.map(([ext, count]) => ({
       ext,
       count,
-      percentage: ((count / total) * 100).toFixed(1)
+      percentage: ((count / totalLines) * 100).toFixed(1)
     }));
-  }, [extensions]);
+  }, [extensions, totalLines]);
+
+  const sortedFolders = useMemo(() => {
+    return [...folders].sort((a, b) => (folderLines[b] || 0) - (folderLines[a] || 0));
+  }, [folders, folderLines]);
 
   const toggleExtension = (ext: string) => {
     setSelectedExtensions(prev => 
@@ -44,7 +52,8 @@ const GitSettings: React.FC<GitSettingsProps> = ({ extensions, folders, onAnalyz
           {topExtensions.map(({ ext, percentage }) => (
             <button
               key={ext}
-              className={`btn btn-sm rounded-pill px-3 border ${selectedExtensions.includes(ext) ? 'btn-primary' : 'btn-outline-secondary'}`}
+              type="button"
+              className={`btn btn-sm rounded-pill px-3 border transition-all ${selectedExtensions.includes(ext) ? 'btn-primary' : 'btn-outline-secondary'}`}
               onClick={() => toggleExtension(ext)}
             >
               {ext} <span className="opacity-75 ps-1">{percentage}%</span>
@@ -54,19 +63,24 @@ const GitSettings: React.FC<GitSettingsProps> = ({ extensions, folders, onAnalyz
       </div>
 
       <div className="mb-4">
-        <label className="form-label text-muted small text-uppercase fw-bold mb-3 ls-1">Folders</label>
+        <label className="form-label text-muted small text-uppercase fw-bold mb-3 ls-1">Folders (by line count)</label>
         <div className="list-group list-group-flush border rounded overflow-auto" style={{ maxHeight: '200px' }}>
-          {folders.map(folder => (
-            <label key={folder} className="list-group-item list-group-item-action d-flex align-items-center gap-2 py-2 small">
-              <input
-                type="checkbox"
-                className="form-check-input mt-0"
-                checked={selectedFolders.includes(folder)}
-                onChange={() => toggleFolder(folder)}
-              />
-              <span className="text-truncate">{folder}</span>
-            </label>
-          ))}
+          {sortedFolders.map(folder => {
+            const lines = folderLines[folder] || 0;
+            const pct = ((lines / totalLines) * 100).toFixed(1);
+            return (
+              <label key={folder} className="list-group-item list-group-item-action d-flex align-items-center gap-2 py-2 small">
+                <input
+                  type="checkbox"
+                  className="form-check-input mt-0"
+                  checked={selectedFolders.includes(folder)}
+                  onChange={() => toggleFolder(folder)}
+                />
+                <span className="text-truncate flex-grow-1">{folder}</span>
+                <span className="text-muted opacity-50">{pct}%</span>
+              </label>
+            );
+          })}
         </div>
       </div>
 

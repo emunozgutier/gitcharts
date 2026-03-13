@@ -119,34 +119,62 @@ export class GitArchaeology {
    */
 
   /**
-   * Scans the latest commit to get an overview of file types and folders.
+   * Downloads (clones) the repository.
    */
-  async scanRepo(): Promise<{ extensions: Record<string, number>; folders: string[] }> {
+  async download(onProgress?: (progress: string) => void): Promise<void> {
+    if (onProgress) onProgress('Initializing local filesystem...');
+    await cloneRepo({
+      dir: this.dir,
+      repoUrl: this.repoUrl,
+      depth: 100,
+      onProgress: (msg) => onProgress && onProgress(msg),
+    });
+  }
+
+  /**
+   * Scans the latest commit to get an overview of file types (by line count) and folders.
+   */
+  async scanRepo(): Promise<{ 
+    extensions: Record<string, number>; 
+    folders: string[]; 
+    folderLines: Record<string, number>;
+  }> {
     const commits = await readCommitLog(this.dir, 1);
+    if (commits.length === 0) throw new Error("No commits found");
     const latestOid = commits[0].oid;
     const files = await listAllFiles(this.dir, latestOid);
 
-    const extensions: Record<string, number> = {};
-    const foldersSet = new Set<string>();
+    const extensionsLines: Record<string, number> = {};
+    const foldersLines: Record<string, number> = {};
 
     for (const file of files) {
+      let folder = '.';
       const parts = file.split('/');
       if (parts.length > 1) {
-        foldersSet.add(parts.slice(0, -1).join('/'));
-      } else {
-        foldersSet.add('.');
+        folder = parts.slice(0, -1).join('/');
       }
 
       const extMatch = file.match(/\.([^.]+)$/);
-      if (extMatch) {
-        const ext = extMatch[0];
-        extensions[ext] = (extensions[ext] || 0) + 1;
+      const ext = extMatch ? extMatch[0] : null;
+
+      try {
+        const content = await readFileAtCommit(this.dir, latestOid, file);
+        if (content) {
+          const lines = content.split('\n').length;
+          if (ext) {
+            extensionsLines[ext] = (extensionsLines[ext] || 0) + lines;
+          }
+          foldersLines[folder] = (foldersLines[folder] || 0) + lines;
+        }
+      } catch {
+        // Skip files that can't be read
       }
     }
 
     return {
-      extensions,
-      folders: Array.from(foldersSet).sort(),
+      extensions: extensionsLines,
+      folders: Object.keys(foldersLines).sort(),
+      folderLines: foldersLines,
     };
   }
 
@@ -155,16 +183,12 @@ export class GitArchaeology {
    */
   async run(
     onProgress?: (progress: string) => void,
-    options?: { extensions?: string[]; folders?: string[] }
+    options?: { extensions?: string[]; folders?: string[], skipClone?: boolean }
   ): Promise<BlameDataPoint[]> {
-    // ── 1. Clone ────────────────────────────────────────────────────────────
-    if (onProgress) onProgress('Initializing local filesystem...');
-    await cloneRepo({
-      dir: this.dir,
-      repoUrl: this.repoUrl,
-      depth: 100,
-      onProgress: (msg) => onProgress && onProgress(msg),
-    });
+    // ── 1. Clone (if not skipped) ───────────────────────────────────────────
+    if (!options?.skipClone) {
+      await this.download(onProgress);
+    }
 
     // ── 2. Commit log ───────────────────────────────────────────────────────
     const commits = await readCommitLog(this.dir, 50);
