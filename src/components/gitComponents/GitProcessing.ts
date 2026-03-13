@@ -183,7 +183,14 @@ export class GitArchaeology {
    */
   async run(
     onProgress?: (progress: string) => void,
-    options?: { extensions?: string[]; folders?: string[], skipClone?: boolean }
+    options?: { 
+      extensions?: string[]; 
+      folders?: string[]; 
+      skipClone?: boolean;
+      depth?: number;
+      startDate?: string;
+      endDate?: string;
+    }
   ): Promise<BlameDataPoint[]> {
     // ── 1. Clone (if not skipped) ───────────────────────────────────────────
     if (!options?.skipClone) {
@@ -191,7 +198,20 @@ export class GitArchaeology {
     }
 
     // ── 2. Commit log ───────────────────────────────────────────────────────
-    const commits = await readCommitLog(this.dir, 50);
+    const depth = options?.depth || 50;
+    let commits = await readCommitLog(this.dir, depth);
+
+    // Apply date filters if provided
+    if (options?.startDate || options?.endDate) {
+      const start = options.startDate ? new Date(options.startDate).getTime() : 0;
+      const end = options.endDate ? new Date(options.endDate).getTime() : Infinity;
+      
+      commits = commits.filter(c => {
+        const ts = c.timestamp * 1000;
+        return ts >= start && ts <= end;
+      });
+    }
+
     const ordered = [...commits].reverse();
     console.log(`[GitProcessing] Found ${ordered.length} commits to analyze.`);
 
