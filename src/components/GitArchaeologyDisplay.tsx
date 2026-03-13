@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { GitArchaeology, type BlameDataPoint } from './GitProcessing';
+import { GitArchaeology, type BlameDataPoint } from './GitArchaeology';
 import embed from 'vega-embed';
 
 interface GitArchaeologyDisplayProps {
