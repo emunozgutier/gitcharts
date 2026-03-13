@@ -23,7 +23,7 @@
 import {
   cloneRepo,
   readCommitLog,
-  listSourceFiles,
+  listAllFiles,
   readFileAtCommit,
   withTimeout,
 } from './GitDownload';
@@ -117,21 +117,57 @@ export class GitArchaeology {
    * newest) and attribute line counts to the quarter in which those lines first
    * appeared.
    */
-  async run(onProgress?: (progress: string) => void): Promise<BlameDataPoint[]> {
+
+  /**
+   * Scans the latest commit to get an overview of file types and folders.
+   */
+  async scanRepo(): Promise<{ extensions: Record<string, number>; folders: string[] }> {
+    const commits = await readCommitLog(this.dir, 1);
+    const latestOid = commits[0].oid;
+    const files = await listAllFiles(this.dir, latestOid);
+
+    const extensions: Record<string, number> = {};
+    const foldersSet = new Set<string>();
+
+    for (const file of files) {
+      const parts = file.split('/');
+      if (parts.length > 1) {
+        foldersSet.add(parts.slice(0, -1).join('/'));
+      } else {
+        foldersSet.add('.');
+      }
+
+      const extMatch = file.match(/\.([^.]+)$/);
+      if (extMatch) {
+        const ext = extMatch[0];
+        extensions[ext] = (extensions[ext] || 0) + 1;
+      }
+    }
+
+    return {
+      extensions,
+      folders: Array.from(foldersSet).sort(),
+    };
+  }
+
+  /**
+   * Run the pseudo-blame archaeology process.
+   */
+  async run(
+    onProgress?: (progress: string) => void,
+    options?: { extensions?: string[]; folders?: string[] }
+  ): Promise<BlameDataPoint[]> {
     // ── 1. Clone ────────────────────────────────────────────────────────────
     if (onProgress) onProgress('Initializing local filesystem...');
     await cloneRepo({
       dir: this.dir,
       repoUrl: this.repoUrl,
-      // depth 100 gives enough objects to cover 50 commits
       depth: 100,
       onProgress: (msg) => onProgress && onProgress(msg),
     });
 
     // ── 2. Commit log ───────────────────────────────────────────────────────
-    // Read 50 commits so we can span multiple quarters
     const commits = await readCommitLog(this.dir, 50);
-    // Work from oldest → newest for correct attribution
     const ordered = [...commits].reverse();
     console.log(`[GitProcessing] Found ${ordered.length} commits to analyze.`);
 
@@ -142,22 +178,32 @@ export class GitArchaeology {
     // ── 3. Per-commit analysis ──────────────────────────────────────────────
     for (let i = 0; i < ordered.length; i++) {
       const commit = ordered[i];
-      const commitDate = new Date(commit.timestamp * 1000);
       const commitDateStr = toDateStr(commit.timestamp);
-      const commitPeriod = getPeriod(commitDate);
+      const commitPeriod = getPeriod(new Date(commit.timestamp * 1000));
 
       if (onProgress) {
         onProgress(`Analyzing snapshot ${i + 1}/${ordered.length}: ${commit.oid.substring(0, 7)}...`);
       }
 
-      // Sample a few files for speed
-      const files = await withTimeout(
-        listSourceFiles(this.dir, commit.oid),
+      let files = await withTimeout(
+        listAllFiles(this.dir, commit.oid),
         30_000,
         `Listing files at ${commit.oid.substring(0, 7)}`
       );
-      const sampledFiles = files.slice(0, 5);
-      console.log(`[GitProcessing] commit ${commit.oid.substring(0,7)} (${commitPeriod}): ${files.length} source files, sampling ${sampledFiles.length}`);
+
+      // Apply filters
+      if (options?.extensions && options.extensions.length > 0) {
+        files = files.filter(f => options.extensions!.some(ext => f.endsWith(ext)));
+      }
+      if (options?.folders && options.folders.length > 0) {
+        files = files.filter(f => options.folders!.some(folder => f.startsWith(folder)));
+      }
+
+      // Sample to avoid hitting browser memory limits for huge repos
+      // But let's be more generous than 5, say 15
+      const sampledFiles = files.slice(0, 15);
+      
+      console.log(`[GitProcessing] commit ${commit.oid.substring(0,7)} (${commitPeriod}): ${files.length} matching files, sampling ${sampledFiles.length}`);
 
       const periodCounts: Record<string, number> = {};
 
@@ -168,12 +214,8 @@ export class GitArchaeology {
             15_000,
             `Reading ${filepath} at ${commit.oid.substring(0, 7)}`
           );
-          if (newerContent === null) {
-            console.warn(`[GitProcessing] readFileAtCommit returned null for ${filepath} @ ${commit.oid.substring(0,7)}`);
-            continue;
-          }
+          if (newerContent === null) continue;
 
-          // Fetch the previous snapshot for this file (if it exists)
           let olderContent: string | null = null;
           if (i > 0) {
             const prevOid = ordered[i - 1].oid;
@@ -185,11 +227,9 @@ export class GitArchaeology {
           }
 
           if (olderContent === null) {
-            // First time we see this file – all lines are new
             const lineCount = newerContent.split('\n').length;
             periodCounts[commitPeriod] = (periodCounts[commitPeriod] || 0) + lineCount;
           } else {
-            // Pseudo-blame: attribute new lines to this commit's period
             const { newLineCount } = pseudoBlame(olderContent, newerContent);
             if (newLineCount > 0) {
               periodCounts[commitPeriod] = (periodCounts[commitPeriod] || 0) + newLineCount;
@@ -205,7 +245,6 @@ export class GitArchaeology {
       }
     }
 
-    console.log(`[GitProcessing] Final data (${data.length} points):`, data);
     return data.sort((a, b) => a.commit_date.localeCompare(b.commit_date));
   }
 
