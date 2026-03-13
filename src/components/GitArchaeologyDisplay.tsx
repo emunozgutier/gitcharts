@@ -64,7 +64,13 @@ const GitArchaeologyDisplay: React.FC<GitArchaeologyDisplayProps> = ({
     }
   }, [cachedResult, state, startInitialClone]);
 
-  const handleStartAnalysis = async (extensions: string[], folders: string[]) => {
+  const handleStartAnalysis = async (options: {
+    selectedExtensions: string[];
+    selectedFolders: string[];
+    depth: number;
+    startDate: string;
+    endDate: string;
+  }) => {
     setState('ANALYZING');
     setProgress("Analyzing commit history...");
     
@@ -73,7 +79,14 @@ const GitArchaeologyDisplay: React.FC<GitArchaeologyDisplayProps> = ({
       // step 2: run analysis on already downloaded repo
       const results = await archaeology.run(
         (msg) => setProgress(msg), 
-        { extensions, folders, skipClone: true }
+        { 
+          extensions: options.selectedExtensions, 
+          folders: options.selectedFolders, 
+          skipClone: true,
+          depth: options.depth,
+          startDate: options.startDate,
+          endDate: options.endDate
+        }
       );
       
       setData(results);
