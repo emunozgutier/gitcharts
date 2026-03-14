@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { type GranularityUnit } from './GitArchaeology';
+import { type GranularityUnit } from './gitComponents/GitBlame';
 
 interface GitSettingsProps {
   extensions: Record<string, number>;
@@ -373,7 +373,7 @@ const GitSettings: React.FC<GitSettingsProps> = ({ extensions, folders, folderLi
             depth: effectiveDepth,
             startDate: toISODate(minVal),
             endDate: toISODate(maxVal),
-            granularity: granularity === 'custom' ? customDays : granularity
+            granularity: (granularity === 'custom' ? customDays : granularity) as GranularityUnit
           })}
         >
           Start Archaeology Analysis
