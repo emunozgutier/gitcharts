@@ -1,11 +1,36 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import './App.css'
 import SearchBar from './components/SearchBar'
 import GitArchaeologyDisplay from './components/GitArchaeologyDisplay'
 
 function App() {
-  const [selectedRepo, setSelectedRepo] = useState<string | null>(null);
+  const [selectedRepo, setSelectedRepo] = useState<string | null>(() => {
+    const hash = window.location.hash.substring(1);
+    return hash || null;
+  });
   const [repoCache, setRepoCache] = useState<Record<string, { stats: any; data: any[] }>>({});
+
+  // Sync selectedRepo with URL hash
+  useEffect(() => {
+    const handleHashChange = () => {
+      const hash = window.location.hash.substring(1);
+      if (hash !== selectedRepo) {
+        setSelectedRepo(hash || null);
+      }
+    };
+
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, [selectedRepo]);
+
+  // Update URL hash when selectedRepo changes
+  useEffect(() => {
+    const currentHash = window.location.hash.substring(1);
+    const newHash = selectedRepo || '';
+    if (currentHash !== newHash) {
+      window.location.hash = newHash;
+    }
+  }, [selectedRepo]);
 
   const updateCache = (repo: string, stats: any, data: any[]) => {
     setRepoCache(prev => ({ ...prev, [repo]: { stats, data } }));
