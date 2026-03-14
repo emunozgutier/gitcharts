@@ -38,8 +38,17 @@ const GitSettings: React.FC<GitSettingsProps> = ({ extensions, folders, folderLi
   }, [extensions, totalLines]);
 
   const sortedFolders = useMemo(() => {
-    return [...folders].sort((a, b) => (folderLines[b] || 0) - (folderLines[a] || 0));
+    return folders
+      .filter(f => f !== '.')
+      .sort((a, b) => (folderLines[b] || 0) - (folderLines[a] || 0));
   }, [folders, folderLines]);
+
+  // Preselect all folders by default when they arrive
+  React.useEffect(() => {
+    if (sortedFolders.length > 0 && selectedFolders.length === 0) {
+      setSelectedFolders(sortedFolders);
+    }
+  }, [sortedFolders]);
 
   const formatDate = (ts: number) => {
     return new Date(ts * 1000).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
