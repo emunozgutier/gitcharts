@@ -25,6 +25,7 @@ const GitArchaeologyDisplay: React.FC<GitArchaeologyDisplayProps> = ({
     extensions: Record<string, number>; 
     folders: string[]; 
     folderLines: Record<string, number>;
+    timeRange: { min: number; max: number };
   } | null>(null);
 
   const startInitialClone = useCallback(async () => {
@@ -116,6 +117,7 @@ const GitArchaeologyDisplay: React.FC<GitArchaeologyDisplayProps> = ({
             extensions={repoInfo.extensions} 
             folders={repoInfo.folders} 
             folderLines={repoInfo.folderLines}
+            timeRange={repoInfo.timeRange}
             onAnalyze={handleStartAnalysis} 
           />
         )}

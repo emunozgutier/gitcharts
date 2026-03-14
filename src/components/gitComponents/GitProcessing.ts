@@ -138,10 +138,17 @@ export class GitArchaeology {
     extensions: Record<string, number>; 
     folders: string[]; 
     folderLines: Record<string, number>;
+    timeRange: { min: number; max: number };
   }> {
-    const commits = await readCommitLog(this.dir, 1);
+    const depth = 100;
+    const commits = await readCommitLog(this.dir, depth);
     if (commits.length === 0) throw new Error("No commits found");
+    
     const latestOid = commits[0].oid;
+    const timestamps = commits.map(c => c.timestamp);
+    const minTime = Math.min(...timestamps);
+    const maxTime = Math.max(...timestamps);
+
     const files = await listAllFiles(this.dir, latestOid);
 
     const extensionsLines: Record<string, number> = {};
@@ -175,6 +182,7 @@ export class GitArchaeology {
       extensions: extensionsLines,
       folders: Object.keys(foldersLines).sort(),
       folderLines: foldersLines,
+      timeRange: { min: minTime, max: maxTime },
     };
   }
 

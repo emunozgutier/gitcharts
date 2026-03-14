@@ -4,6 +4,7 @@ interface GitSettingsProps {
   extensions: Record<string, number>;
   folders: string[];
   folderLines: Record<string, number>;
+  timeRange: { min: number; max: number };
   onAnalyze: (options: {
     selectedExtensions: string[];
     selectedFolders: string[];
@@ -13,12 +14,13 @@ interface GitSettingsProps {
   }) => void;
 }
 
-const GitSettings: React.FC<GitSettingsProps> = ({ extensions, folders, folderLines, onAnalyze }) => {
+const GitSettings: React.FC<GitSettingsProps> = ({ extensions, folders, folderLines, timeRange, onAnalyze }) => {
   const [selectedExtensions, setSelectedExtensions] = useState<string[]>([]);
   const [selectedFolders, setSelectedFolders] = useState<string[]>([]);
   const [depth, setDepth] = useState<number>(50);
-  const [startDate, setStartDate] = useState<string>('');
-  const [endDate, setEndDate] = useState<string>('');
+  
+  const [minVal, setMinVal] = useState(timeRange.min);
+  const [maxVal, setMaxVal] = useState(timeRange.max);
 
   const totalLines = useMemo(() => 
     Object.values(extensions).reduce((sum, count) => sum + count, 0), 
@@ -38,6 +40,24 @@ const GitSettings: React.FC<GitSettingsProps> = ({ extensions, folders, folderLi
   const sortedFolders = useMemo(() => {
     return [...folders].sort((a, b) => (folderLines[b] || 0) - (folderLines[a] || 0));
   }, [folders, folderLines]);
+
+  const formatDate = (ts: number) => {
+    return new Date(ts * 1000).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+  };
+  
+  const toISODate = (ts: number) => {
+    return new Date(ts * 1000).toISOString().split('T')[0];
+  };
+
+  const handleMinChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = Math.min(Number(e.target.value), maxVal - 86400); // at least 1 day diff
+    setMinVal(value);
+  };
+
+  const handleMaxChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = Math.max(Number(e.target.value), minVal + 86400);
+    setMaxVal(value);
+  };
 
   const toggleExtension = (ext: string) => {
     setSelectedExtensions(prev => 
@@ -74,25 +94,39 @@ const GitSettings: React.FC<GitSettingsProps> = ({ extensions, folders, folderLi
         </div>
 
         <div className="col-12 border-top pt-4">
-          <label className="form-label text-muted small text-uppercase fw-bold mb-3 ls-1 d-block">Time Frame (Optional)</label>
-          <div className="row g-2">
-            <div className="col-6">
-              <label className="small text-muted mb-1 d-block ps-1">Start Date</label>
-              <input 
-                type="date" 
-                className="form-control form-control-sm border-0 bg-light rounded-pill px-3" 
-                value={startDate}
-                onChange={e => setStartDate(e.target.value)}
-              />
+          <label className="form-label text-muted small text-uppercase fw-bold mb-4 ls-1 d-block">Time Frame</label>
+          <div className="range-slider-container px-2">
+            <div className="range-slider-labels d-flex justify-content-between mb-3">
+              <span className="small fw-bold text-primary bg-primary bg-opacity-10 px-2 py-1 rounded-pill">{formatDate(minVal)}</span>
+              <span className="small fw-bold text-primary bg-primary bg-opacity-10 px-2 py-1 rounded-pill">{formatDate(maxVal)}</span>
             </div>
-            <div className="col-6">
-              <label className="small text-muted mb-1 d-block ps-1">End Date</label>
-              <input 
-                type="date" 
-                className="form-control form-control-sm border-0 bg-light rounded-pill px-3" 
-                value={endDate}
-                onChange={e => setEndDate(e.target.value)}
+            <div className="dual-range-wrapper position-relative" style={{ height: '40px' }}>
+              <input
+                type="range"
+                min={timeRange.min}
+                max={timeRange.max}
+                value={minVal}
+                onChange={handleMinChange}
+                className="thumb thumb--left"
+                style={{ zIndex: minVal > timeRange.max - 100 ? 5 : 3 }}
               />
+              <input
+                type="range"
+                min={timeRange.min}
+                max={timeRange.max}
+                value={maxVal}
+                onChange={handleMaxChange}
+                className="thumb thumb--right"
+                style={{ zIndex: 4 }}
+              />
+              <div className="slider-track-bg"></div>
+              <div 
+                className="slider-range-fill"
+                style={{
+                  left: `${((minVal - timeRange.min) / (timeRange.max - timeRange.min)) * 100}%`,
+                  width: `${((maxVal - minVal) / (timeRange.max - timeRange.min)) * 100}%`
+                }}
+              ></div>
             </div>
           </div>
         </div>
@@ -143,8 +177,8 @@ const GitSettings: React.FC<GitSettingsProps> = ({ extensions, folders, folderLi
             selectedExtensions,
             selectedFolders,
             depth,
-            startDate,
-            endDate
+            startDate: toISODate(minVal),
+            endDate: toISODate(maxVal)
           })}
         >
           Start Analysis
@@ -156,7 +190,57 @@ const GitSettings: React.FC<GitSettingsProps> = ({ extensions, folders, folderLi
         .smallest { font-size: 0.75rem; }
         .git-settings { background: #fdfdfd; border: 1px solid rgba(0,0,0,0.02); }
         .transition-all { transition: all 0.2s ease; }
-        ::-webkit-calendar-picker-indicator { opacity: 0.5; cursor: pointer; }
+        
+        .dual-range-wrapper { position: relative; width: 100%; }
+        .thumb {
+          position: absolute;
+          height: 0;
+          width: 100%;
+          outline: none;
+          pointer-events: none;
+          -webkit-appearance: none;
+        }
+        .thumb::-webkit-slider-thumb {
+          background-color: #0d6efd;
+          border: 2px solid #fff;
+          border-radius: 50%;
+          box-shadow: 0 0 1px 1px #ced4da;
+          cursor: pointer;
+          height: 18px;
+          width: 18px;
+          margin-top: 4px;
+          pointer-events: all;
+          position: relative;
+          -webkit-appearance: none;
+        }
+        .thumb::-moz-range-thumb {
+          background-color: #0d6efd;
+          border: 2px solid #fff;
+          border-radius: 50%;
+          box-shadow: 0 0 1px 1px #ced4da;
+          cursor: pointer;
+          height: 18px;
+          width: 18px;
+          pointer-events: all;
+          position: relative;
+        }
+        .slider-track-bg {
+          position: absolute;
+          height: 4px;
+          border-radius: 2px;
+          background-color: #e9ecef;
+          width: 100%;
+          top: 11px;
+          z-index: 1;
+        }
+        .slider-range-fill {
+          position: absolute;
+          height: 4px;
+          border-radius: 2px;
+          background-color: #0d6efd;
+          top: 11px;
+          z-index: 2;
+        }
       `}</style>
     </div>
   );
