@@ -36,6 +36,16 @@ export interface BlameDataPoint {
   line_count: number;
 }
 
+const IGNORED_EXTENSIONS = [
+  '.json', '.png', '.jpg', '.jpeg', '.gif', '.svg', '.ico', '.pdf', '.zip', '.gz', '.tar', 
+  '.map', '.lock', '.woff', '.woff2', '.ttf', '.eot', '.mp4', '.webm', '.ogg', '.mp3', '.wav'
+];
+
+function isCodeFile(filename: string): boolean {
+  const lower = filename.toLowerCase();
+  return !IGNORED_EXTENSIONS.some(ext => lower.endsWith(ext));
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function getPeriod(date: Date): string {
@@ -149,7 +159,8 @@ export class GitArchaeology {
     const minTime = Math.min(...timestamps);
     const maxTime = Math.max(...timestamps);
 
-    const files = await listAllFiles(this.dir, latestOid);
+    const allFiles = await listAllFiles(this.dir, latestOid);
+    const files = allFiles.filter(isCodeFile);
 
     const extensionsLines: Record<string, number> = {};
     const foldersLines: Record<string, number> = {};
@@ -237,19 +248,26 @@ export class GitArchaeology {
         onProgress(`Analyzing snapshot ${i + 1}/${ordered.length}: ${commit.oid.substring(0, 7)}...`);
       }
 
-      let files = await withTimeout(
+      let filesAtCommit = await withTimeout(
         listAllFiles(this.dir, commit.oid),
         30_000,
         `Listing files at ${commit.oid.substring(0, 7)}`
       );
 
-      // Apply filters
-      if (options?.extensions && options.extensions.length > 0) {
-        files = files.filter(f => options.extensions!.some(ext => f.endsWith(ext)));
-      }
+      // Filter out non-code files unless specifically requested
+      filesAtCommit = filesAtCommit.filter(f => {
+        if (options?.extensions && options.extensions.length > 0) {
+          return options.extensions.some(ext => f.toLowerCase().endsWith(ext.toLowerCase()));
+        }
+        return isCodeFile(f);
+      });
+
+      // Apply folder filters
       if (options?.folders && options.folders.length > 0) {
-        files = files.filter(f => options.folders!.some(folder => f.startsWith(folder)));
+        filesAtCommit = filesAtCommit.filter(f => options.folders!.some(folder => f.startsWith(folder)));
       }
+      
+      const files = filesAtCommit;
 
       // Sample to avoid hitting browser memory limits for huge repos
       // But let's be more generous than 5, say 15
