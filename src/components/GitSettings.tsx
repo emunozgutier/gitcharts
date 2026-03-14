@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
+import { type GranularityUnit } from './GitArchaeology';
 
 interface GitSettingsProps {
   extensions: Record<string, number>;
@@ -11,6 +12,7 @@ interface GitSettingsProps {
     depth: number;
     startDate: string;
     endDate: string;
+    granularity: GranularityUnit;
   }) => void;
 }
 
@@ -26,6 +28,8 @@ const GitSettings: React.FC<GitSettingsProps> = ({ extensions, folders, folderLi
   const [selectedFolders, setSelectedFolders] = useState<string[]>([]);
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
   const [depth, setDepth] = useState<number>(50);
+  const [granularity, setGranularity] = useState<string>('quarter');
+  const [customDays, setCustomDays] = useState<number>(30);
   
   const [minVal, setMinVal] = useState(timeRange.min);
   const [maxVal, setMaxVal] = useState(timeRange.max);
@@ -289,9 +293,46 @@ const GitSettings: React.FC<GitSettingsProps> = ({ extensions, folders, folderLi
           </div>
         </div>
 
+        {/* Period Granularity */}
+        <div className="col-12 border-top pt-4">
+          <label className="form-label text-muted small text-uppercase fw-bold mb-3 ls-1 d-block">3. Grouping Granularity</label>
+          <div className="d-flex flex-wrap gap-2 mb-3">
+            {[
+              { id: 'year', label: 'Year' },
+              { id: 'quarter', label: 'Quarter' },
+              { id: 'month', label: 'Month' },
+              { id: 'week', label: 'Week' },
+              { id: 'day', label: 'Day' },
+              { id: 'custom', label: 'Custom' }
+            ].map((unit) => (
+              <button
+                key={unit.id}
+                type="button"
+                className={`btn btn-sm rounded-pill px-3 border transition-all ${granularity === unit.id ? 'btn-primary shadow-sm' : 'btn-outline-secondary'}`}
+                onClick={() => setGranularity(unit.id)}
+              >
+                {unit.label}
+              </button>
+            ))}
+          </div>
+          
+          {granularity === 'custom' && (
+            <div className="d-flex align-items-center gap-3 bg-light p-3 rounded-3 mb-3 border">
+              <label className="small fw-bold mb-0">Every</label>
+              <input 
+                type="number" 
+                className="form-control form-control-sm w-auto" 
+                value={customDays} 
+                onChange={e => setCustomDays(Math.max(1, parseInt(e.target.value) || 1))}
+              />
+              <label className="small fw-bold mb-0">days</label>
+            </div>
+          )}
+        </div>
+
         {/* File Types */}
         <div className="col-12 border-top pt-4">
-          <label className="form-label text-muted small text-uppercase fw-bold mb-3 ls-1 d-block">3. Code Types (Top 5)</label>
+          <label className="form-label text-muted small text-uppercase fw-bold mb-3 ls-1 d-block">4. Code Types (Top 5)</label>
           <div className="d-flex flex-wrap gap-2">
             {topExtensions.map(({ ext, percentage }) => (
               <button
@@ -309,7 +350,7 @@ const GitSettings: React.FC<GitSettingsProps> = ({ extensions, folders, folderLi
         {/* Folder Tree */}
         <div className="col-12 border-top pt-4">
           <div className="d-flex justify-content-between align-items-center mb-3">
-            <label className="form-label text-muted small text-uppercase fw-bold mb-0 ls-1">4. Folder Hierarchy</label>
+            <label className="form-label text-muted small text-uppercase fw-bold mb-0 ls-1">5. Folder Hierarchy</label>
             <button 
               className="btn btn-link btn-sm text-decoration-none p-0 smallest"
               onClick={() => setSelectedFolders(selectedFolders.length === folders.length - 1 ? [] : folders.filter(f => f !== '.'))}
@@ -331,7 +372,8 @@ const GitSettings: React.FC<GitSettingsProps> = ({ extensions, folders, folderLi
             selectedFolders,
             depth: effectiveDepth,
             startDate: toISODate(minVal),
-            endDate: toISODate(maxVal)
+            endDate: toISODate(maxVal),
+            granularity: granularity === 'custom' ? customDays : granularity
           })}
         >
           Start Archaeology Analysis

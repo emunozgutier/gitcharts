@@ -30,9 +30,11 @@ import {
 
 // ── Public types ──────────────────────────────────────────────────────────────
 
+export type GranularityUnit = 'year' | 'quarter' | 'month' | 'week' | 'day' | number;
+
 export interface BlameDataPoint {
   commit_date: string; // YYYY-MM-DD snapshot date
-  period: string;      // e.g. "2024-Q1" – the quarter the lines originated
+  period: string;      // Label for the period the lines originated (e.g. "2024-Q1")
   line_count: number;
 }
 
@@ -48,10 +50,42 @@ function isCodeFile(filename: string): boolean {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function getPeriod(date: Date): string {
+function getPeriod(date: Date, granularity: GranularityUnit = 'quarter'): string {
   const year = date.getUTCFullYear();
-  const quarter = Math.floor(date.getUTCMonth() / 3) + 1;
-  return `${year}-Q${quarter}`;
+  if (granularity === 'year') return `${year}`;
+  
+  if (granularity === 'quarter') {
+    const quarter = Math.floor(date.getUTCMonth() / 3) + 1;
+    return `${year}-Q${quarter}`;
+  }
+  
+  if (granularity === 'month') {
+    const month = date.getUTCMonth() + 1;
+    return `${year}-${month.toString().padStart(2, '0')}`;
+  }
+  
+  if (granularity === 'week') {
+    const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+    const dayNum = d.getUTCDay() || 7;
+    d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+    const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+    const weekNo = Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+    return `${d.getUTCFullYear()}-W${weekNo.toString().padStart(2, '0')}`;
+  }
+  
+  if (granularity === 'day') {
+    return date.toISOString().split('T')[0];
+  }
+  
+  if (typeof granularity === 'number' && granularity > 0) {
+    const dayMillis = 86400000;
+    const intervalMillis = dayMillis * granularity;
+    const bucket = Math.floor(date.getTime() / intervalMillis);
+    const bucketDate = new Date(bucket * intervalMillis);
+    return bucketDate.toISOString().split('T')[0];
+  }
+
+  return `${year}-Q${Math.floor(date.getUTCMonth() / 3) + 1}`;
 }
 
 function toDateStr(timestampSeconds: number): string {
@@ -197,6 +231,7 @@ export class GitArchaeology {
       depth?: number;
       startDate?: string;
       endDate?: string;
+      granularity?: GranularityUnit;
     }
   ): Promise<BlameDataPoint[]> {
     // ── 1. Clone (if not skipped) ───────────────────────────────────────────
@@ -236,7 +271,7 @@ export class GitArchaeology {
     for (let i = 0; i < ordered.length; i++) {
       const commit = ordered[i];
       const commitDateStr = toDateStr(commit.timestamp);
-      const commitPeriod = getPeriod(new Date(commit.timestamp * 1000));
+      const commitPeriod = getPeriod(new Date(commit.timestamp * 1000), options?.granularity);
 
       if (onProgress) {
         onProgress(`Analyzing snapshot ${i + 1}/${ordered.length}: ${commit.oid.substring(0, 7)}...`);
@@ -296,7 +331,8 @@ export class GitArchaeology {
           } else {
             const { newLineCount } = pseudoBlame(olderContent, newerContent);
             if (newLineCount > 0) {
-              periodCounts[commitPeriod] = (periodCounts[commitPeriod] || 0) + newLineCount;
+              const currentPeriod = getPeriod(new Date(commit.timestamp * 1000), options?.granularity);
+              periodCounts[currentPeriod] = (periodCounts[currentPeriod] || 0) + newLineCount;
             }
           }
         } catch (e) {

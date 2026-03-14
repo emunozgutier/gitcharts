@@ -1,5 +1,5 @@
 import React, { useEffect, useCallback } from 'react';
-import { GitArchaeology, cloneRepo } from './GitArchaeology';
+import { GitArchaeology, cloneRepo, type GranularityUnit } from './GitArchaeology';
 import GitStatusDisplay from './GitStatusDisplay';
 import GitChart from './GitChart';
 import GitSettings from './GitSettings';
@@ -84,6 +84,7 @@ const GitArchaeologyDisplay: React.FC<GitArchaeologyDisplayProps> = ({
     depth: number;
     startDate: string;
     endDate: string;
+    granularity: GranularityUnit;
   }) => {
     setState('ANALYZING');
     setProgress("Analyzing commit history...");
@@ -99,7 +100,8 @@ const GitArchaeologyDisplay: React.FC<GitArchaeologyDisplayProps> = ({
           skipClone: true,
           depth: options.depth,
           startDate: options.startDate,
-          endDate: options.endDate
+          endDate: options.endDate,
+          granularity: options.granularity
         }
       );
       

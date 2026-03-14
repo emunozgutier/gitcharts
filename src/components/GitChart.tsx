@@ -35,7 +35,7 @@ const GitChart: React.FC<GitChartProps> = ({ data }) => {
           color: {
             field: 'period',
             type: 'nominal',
-            title: 'Quarter Added',
+            title: 'Period Added',
             scale: { scheme: 'magma' },
             sort: 'descending',
             legend: { 
