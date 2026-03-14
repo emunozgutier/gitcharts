@@ -1,14 +1,15 @@
-import { useState, useEffect } from 'react'
+import { useEffect } from 'react'
 import './App.css'
 import SearchBar from './components/SearchBar'
 import GitArchaeologyDisplay from './components/GitArchaeologyDisplay'
+import { useRepoStore } from './store/useRepoStore'
 
 function App() {
-  const [selectedRepo, setSelectedRepo] = useState<string | null>(() => {
-    const hash = window.location.hash.substring(1);
-    return hash || null;
-  });
-  const [repoCache, setRepoCache] = useState<Record<string, { stats: any; data: any[] }>>({});
+  const { 
+    selectedRepo, 
+    setSelectedRepo, 
+    resetAnalysis 
+  } = useRepoStore();
 
   // Sync selectedRepo with URL hash
   useEffect(() => {
@@ -16,12 +17,13 @@ function App() {
       const hash = window.location.hash.substring(1);
       if (hash !== selectedRepo) {
         setSelectedRepo(hash || null);
+        resetAnalysis();
       }
     };
 
     window.addEventListener('hashchange', handleHashChange);
     return () => window.removeEventListener('hashchange', handleHashChange);
-  }, [selectedRepo]);
+  }, [selectedRepo, setSelectedRepo, resetAnalysis]);
 
   // Update URL hash when selectedRepo changes
   useEffect(() => {
@@ -32,8 +34,11 @@ function App() {
     }
   }, [selectedRepo]);
 
-  const updateCache = (repo: string, stats: any, data: any[]) => {
-    setRepoCache(prev => ({ ...prev, [repo]: { stats, data } }));
+  const handleRepoSelect = (repo: string | null) => {
+    if (repo !== selectedRepo) {
+      setSelectedRepo(repo);
+      resetAnalysis();
+    }
   };
 
   return (
@@ -45,7 +50,7 @@ function App() {
             Dig into repository history and visualize the "sediment" of your code over time.
           </p>
           <div className="w-100" style={{ maxWidth: '800px' }}>
-            <SearchBar onSelect={setSelectedRepo} />
+            <SearchBar onSelect={handleRepoSelect} />
           </div>
           <footer className="mt-auto pt-5 text-muted small">
             Built with Vite + React + Vega-Lite
@@ -55,12 +60,12 @@ function App() {
         <>
           <nav className="navbar navbar-expand-lg navbar-dark bg-dark shadow-sm py-2">
             <div className="container-fluid px-4 d-flex align-items-center justify-content-between">
-              <a className="navbar-brand fw-bold mb-0 d-flex align-items-center" href="#" onClick={() => setSelectedRepo(null)} style={{ cursor: 'pointer', textDecoration: 'none' }}>
+              <a className="navbar-brand fw-bold mb-0 d-flex align-items-center" href="#" onClick={() => handleRepoSelect(null)} style={{ cursor: 'pointer', textDecoration: 'none' }}>
                 <span className="me-2">🏛️</span>
                 <span>GitCharts <span className="text-primary">Archaeology</span></span>
               </a>
               <div className="flex-grow-1 mx-4" style={{ maxWidth: '800px' }}>
-                <SearchBar onSelect={setSelectedRepo} initialValue={selectedRepo} isMinimal />
+                <SearchBar onSelect={handleRepoSelect} initialValue={selectedRepo} isMinimal />
               </div>
               <div className="text-light d-none d-md-block">
                 <span className="badge bg-secondary rounded-pill px-3 py-2 border border-secondary">
@@ -73,8 +78,6 @@ function App() {
           <main className="main-content p-3 container-wide">
             <GitArchaeologyDisplay 
               repoFullName={selectedRepo} 
-              cachedResult={repoCache[selectedRepo]}
-              onAnalysisComplete={(stats: any, data: any[]) => updateCache(selectedRepo, stats, data)}
             />
           </main>
         </>

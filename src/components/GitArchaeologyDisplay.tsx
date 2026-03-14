@@ -1,32 +1,31 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { GitArchaeology, type BlameDataPoint } from './GitArchaeology';
+import React, { useEffect, useCallback } from 'react';
+import { GitArchaeology } from './GitArchaeology';
 import GitStatusDisplay from './GitStatusDisplay';
 import GitChart from './GitChart';
 import GitSettings from './GitSettings';
+import { useRepoStore } from '../store/useRepoStore';
 
 interface GitArchaeologyDisplayProps {
   repoFullName: string;
-  cachedResult?: { stats: any; data: BlameDataPoint[] };
-  onAnalysisComplete?: (stats: any, data: BlameDataPoint[]) => void;
 }
-
-type AnalysisState = 'IDLE' | 'CLONING' | 'SETTINGS' | 'ANALYZING' | 'DONE';
 
 const GitArchaeologyDisplay: React.FC<GitArchaeologyDisplayProps> = ({ 
   repoFullName, 
-  cachedResult, 
-  onAnalysisComplete 
 }) => {
-  const [stats, setStats] = useState<{ size: number; language: string; forks: number } | null>(cachedResult?.stats || null);
-  const [state, setState] = useState<AnalysisState>(cachedResult ? 'DONE' : 'IDLE');
-  const [progress, setProgress] = useState<string | null>(null);
-  const [data, setData] = useState<BlameDataPoint[]>(cachedResult?.data || []);
-  const [repoInfo, setRepoInfo] = useState<{ 
-    extensions: Record<string, number>; 
-    folders: string[]; 
-    folderLines: Record<string, number>;
-    timeRange: { min: number; max: number };
-  } | null>(null);
+  const {
+    analysisState: state,
+    setAnalysisState: setState,
+    progress,
+    setProgress,
+    data,
+    setData,
+    repoInfo,
+    setRepoInfo,
+    stats,
+    setStats,
+    repoCache,
+    updateCache
+  } = useRepoStore();
 
   const startInitialClone = useCallback(async () => {
     setState('CLONING');
@@ -39,7 +38,7 @@ const GitArchaeologyDisplay: React.FC<GitArchaeologyDisplayProps> = ({
       
       const currentStats = {
         size: repoData.size,
-        language: repoData.language,
+        language: repoData.language || 'Unknown',
         forks: repoData.forks_count
       };
       setStats(currentStats);
@@ -56,14 +55,23 @@ const GitArchaeologyDisplay: React.FC<GitArchaeologyDisplayProps> = ({
     } catch (err: any) {
       setProgress(`Error: ${err.message || "Failed to initialize"}`);
       console.error(err);
+      setState('IDLE');
     }
-  }, [repoFullName]);
+  }, [repoFullName, setState, setProgress, setRepoInfo, setStats]);
 
   useEffect(() => {
-    if (!cachedResult && state === 'IDLE') {
+    const cached = repoCache[repoFullName];
+    if (cached) {
+      setData(cached.data);
+      setStats(cached.stats);
+      setState('DONE');
+      return;
+    }
+
+    if (state === 'IDLE') {
       startInitialClone();
     }
-  }, [cachedResult, state, startInitialClone]);
+  }, [repoFullName, repoCache, state, startInitialClone, setData, setStats, setState]);
 
   const handleStartAnalysis = async (options: {
     selectedExtensions: string[];
@@ -91,12 +99,11 @@ const GitArchaeologyDisplay: React.FC<GitArchaeologyDisplayProps> = ({
       );
       
       setData(results);
+      if (stats) {
+        updateCache(repoFullName, { stats, data: results });
+      }
       setState('DONE');
       setProgress(null);
-      
-      if (onAnalysisComplete && stats) {
-        onAnalysisComplete(stats, results);
-      }
     } catch (err: any) {
       setProgress(`Error: ${err.message || "Failed to analyze"}`);
       console.error(err);
