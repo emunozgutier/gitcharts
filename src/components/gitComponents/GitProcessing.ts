@@ -128,18 +128,6 @@ export class GitArchaeology {
    * appeared.
    */
 
-  /**
-   * Downloads (clones) the repository.
-   */
-  async download(onProgress?: (progress: string) => void): Promise<void> {
-    if (onProgress) onProgress('Initializing local filesystem...');
-    await cloneRepo({
-      dir: this.dir,
-      repoUrl: this.repoUrl,
-      depth: 100,
-      onProgress: (msg) => onProgress && onProgress(msg),
-    });
-  }
 
   /**
    * Scans the latest commit to get an overview of file types (by line count) and folders.
@@ -213,7 +201,13 @@ export class GitArchaeology {
   ): Promise<BlameDataPoint[]> {
     // ── 1. Clone (if not skipped) ───────────────────────────────────────────
     if (!options?.skipClone) {
-      await this.download(onProgress);
+      if (onProgress) onProgress('Initializing local filesystem...');
+      await cloneRepo({
+        dir: this.dir,
+        repoUrl: this.repoUrl,
+        depth: 100,
+        onProgress: (msg) => onProgress && onProgress(msg),
+      });
     }
 
     // ── 2. Commit log ───────────────────────────────────────────────────────

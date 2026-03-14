@@ -1,5 +1,5 @@
 import React, { useEffect, useCallback } from 'react';
-import { GitArchaeology } from './GitArchaeology';
+import { GitArchaeology, cloneRepo } from './GitArchaeology';
 import GitStatusDisplay from './GitStatusDisplay';
 import GitChart from './GitChart';
 import GitSettings from './GitSettings';
@@ -45,7 +45,12 @@ const GitArchaeologyDisplay: React.FC<GitArchaeologyDisplayProps> = ({
 
       const archaeology = new GitArchaeology(repoFullName);
       // step 1: download only
-      await archaeology.download((msg) => setProgress(msg));
+      await cloneRepo({
+        dir: archaeology.dir,
+        repoUrl: archaeology.repoUrl,
+        depth: 100,
+        onProgress: (msg: string) => setProgress(msg),
+      });
       
       setProgress("Scanning repository structure...");
       const info = await archaeology.scanRepo();
