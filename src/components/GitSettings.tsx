@@ -45,6 +45,13 @@ const GitSettings: React.FC<GitSettingsProps> = ({ extensions, folders, folderLi
     }));
   }, [extensions, totalLines]);
 
+  // Preselect top extensions by default
+  useEffect(() => {
+    if (topExtensions.length > 0 && selectedExtensions.length === 0) {
+      setSelectedExtensions(topExtensions.map(te => te.ext));
+    }
+  }, [topExtensions]);
+
   // Build Tree Structure
   const folderTree = useMemo(() => {
     const root: FolderNode = { name: 'root', path: '.', lines: 0, children: [] };
