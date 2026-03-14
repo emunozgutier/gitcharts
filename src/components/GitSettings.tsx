@@ -59,6 +59,14 @@ const GitSettings: React.FC<GitSettingsProps> = ({ extensions, folders, folderLi
     setMaxVal(value);
   };
 
+  const daysInRange = Math.max(1, (maxVal - minVal) / 86400);
+  const maxPossiblePoints = Math.floor(daysInRange) + 1;
+  const safeMaxPoints = Math.min(200, maxPossiblePoints);
+  
+  // Ensure depth stays within safe limits
+  const effectiveDepth = Math.max(2, Math.min(depth, safeMaxPoints));
+  const distanceDays = (daysInRange / (effectiveDepth - 1)).toFixed(1);
+
   const toggleExtension = (ext: string) => {
     setSelectedExtensions(prev => 
       prev.includes(ext) ? prev.filter(e => e !== ext) : [...prev, ext]
@@ -76,25 +84,9 @@ const GitSettings: React.FC<GitSettingsProps> = ({ extensions, folders, folderLi
       <h3 className="h5 mb-4 fw-bold">Analysis Settings</h3>
       
       <div className="row g-4 mb-4">
-        <div className="col-12">
-          <label className="form-label text-muted small text-uppercase fw-bold mb-2 ls-1 d-block">Time Points (Commits)</label>
-          <div className="d-flex align-items-center gap-3">
-            <input 
-              type="range" 
-              className="form-range flex-grow-1" 
-              min="10" 
-              max="200" 
-              step="10" 
-              value={depth} 
-              onChange={e => setDepth(parseInt(e.target.value))}
-            />
-            <span className="badge bg-primary rounded-pill px-3 py-2" style={{ minWidth: '4.5rem' }}>{depth} pts</span>
-          </div>
-          <div className="text-muted smallest mt-1 px-1">Number of snapshots to analyze in history.</div>
-        </div>
-
-        <div className="col-12 border-top pt-4">
-          <label className="form-label text-muted small text-uppercase fw-bold mb-4 ls-1 d-block">Time Frame</label>
+        {/* Time Frame - Column 1 */}
+        <div className="col-12 col-md-6">
+          <label className="form-label text-muted small text-uppercase fw-bold mb-4 ls-1 d-block">1. Time Frame</label>
           <div className="range-slider-container px-2">
             <div className="range-slider-labels d-flex justify-content-between mb-3">
               <span className="small fw-bold text-primary bg-primary bg-opacity-10 px-2 py-1 rounded-pill">{formatDate(minVal)}</span>
@@ -129,6 +121,34 @@ const GitSettings: React.FC<GitSettingsProps> = ({ extensions, folders, folderLi
               ></div>
             </div>
           </div>
+          <div className="text-muted smallest mt-2 px-1">Selected range: <strong>{daysInRange.toFixed(0)} days</strong></div>
+        </div>
+
+        {/* Time Points - Column 2 */}
+        <div className="col-12 col-md-6 border-start-md ps-md-4">
+          <label className="form-label text-muted small text-uppercase fw-bold mb-2 ls-1 d-block">2. Time Points</label>
+          <div className="d-flex align-items-center gap-3">
+            <input 
+              type="range" 
+              className="form-range flex-grow-1" 
+              min="2" 
+              max={safeMaxPoints} 
+              step={safeMaxPoints > 20 ? 5 : 1}
+              value={effectiveDepth} 
+              onChange={e => setDepth(parseInt(e.target.value))}
+            />
+            <span className="badge bg-primary rounded-pill px-3 py-2" style={{ minWidth: '4.5rem' }}>{effectiveDepth} pts</span>
+          </div>
+          <div className="mt-3 p-2 bg-light rounded-3 border border-light">
+            <div className="d-flex justify-content-between align-items-center smallest mb-1 text-muted">
+              <span>Status:</span>
+              <span className={`fw-bold ${parseFloat(distanceDays) >= 1 ? 'text-success' : 'text-warning'}`}>
+                {parseFloat(distanceDays) >= 1 ? '✓ Optimal distance' : '⚠ High density'}
+              </span>
+            </div>
+            <div className="h6 mb-0 fw-bold">{distanceDays} days <span className="text-muted fw-normal smaller">between points</span></div>
+          </div>
+          <div className="text-muted smallest mt-2 px-1">Constraint: min 1 day distance.</div>
         </div>
 
         <div className="col-12 border-top pt-4">
@@ -176,7 +196,7 @@ const GitSettings: React.FC<GitSettingsProps> = ({ extensions, folders, folderLi
           onClick={() => onAnalyze({
             selectedExtensions,
             selectedFolders,
-            depth,
+            depth: effectiveDepth,
             startDate: toISODate(minVal),
             endDate: toISODate(maxVal)
           })}
@@ -190,6 +210,10 @@ const GitSettings: React.FC<GitSettingsProps> = ({ extensions, folders, folderLi
         .smallest { font-size: 0.75rem; }
         .git-settings { background: #fdfdfd; border: 1px solid rgba(0,0,0,0.02); }
         .transition-all { transition: all 0.2s ease; }
+        
+        @media (min-width: 768px) {
+          .border-start-md { border-left: 1px solid #dee2e6 !important; }
+        }
         
         .dual-range-wrapper { position: relative; width: 100%; }
         .thumb {
