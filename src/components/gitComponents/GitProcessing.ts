@@ -31,9 +31,10 @@ import {
 import {
   type GranularityUnit,
   type BlameDataPoint,
+  type FileHistory,
   getPeriod,
   toDateStr,
-  pseudoBlame,
+  computeFileHistory,
 } from './GitBlame';
 
 const IGNORED_EXTENSIONS = [
@@ -170,6 +171,7 @@ export class GitArchaeology {
     if (onProgress) onProgress(`Analyzing ${ordered.length} commits...`);
 
     const data: BlameDataPoint[] = [];
+    const repoHistory = new Map<string, FileHistory>(); // Tracks the line-by-line history of each file
 
     // ── 3. Per-commit analysis ──────────────────────────────────────────────
     for (let i = 0; i < ordered.length; i++) {
@@ -208,44 +210,33 @@ export class GitArchaeology {
       
       console.log(`[GitProcessing] commit ${commit.oid.substring(0,7)} (${commitPeriod}): ${files.length} matching files, sampling ${sampledFiles.length}`);
 
-      const periodCounts: Record<string, number> = {};
+      const snapshotLineAges: Record<string, number> = {}; // Aggregates line ages for the current commit snapshot
 
       for (const filepath of sampledFiles) {
         try {
-          const newerContent = await withTimeout(
+          const content = await withTimeout(
             readFileAtCommit(this.dir, commit.oid, filepath),
             15_000,
             `Reading ${filepath} at ${commit.oid.substring(0, 7)}`
           );
-          if (newerContent === null) continue;
+          if (content === null) continue;
 
-          let olderContent: string | null = null;
-          if (i > 0) {
-            const prevOid = ordered[i - 1].oid;
-            olderContent = await withTimeout(
-              readFileAtCommit(this.dir, prevOid, filepath).catch(() => null),
-              15_000,
-              `Reading ${filepath} at previous commit`
-            );
-          }
+          const previousHistory = repoHistory.get(filepath) || null;
+          const updatedHistory = computeFileHistory(previousHistory, content, commitPeriod, filepath);
+          repoHistory.set(filepath, updatedHistory);
 
-          if (olderContent === null) {
-            const lineCount = newerContent.split('\n').length;
-            periodCounts[commitPeriod] = (periodCounts[commitPeriod] || 0) + lineCount;
-          } else {
-            const { newLineCount } = pseudoBlame(olderContent, newerContent);
-            if (newLineCount > 0) {
-              const currentPeriod = getPeriod(new Date(commit.timestamp * 1000), options?.granularity);
-              periodCounts[currentPeriod] = (periodCounts[currentPeriod] || 0) + newLineCount;
-            }
+          // Aggregate line ages for THIS snapshot
+          for (const line of updatedHistory.lines) {
+            snapshotLineAges[line.period] = (snapshotLineAges[line.period] || 0) + 1;
           }
         } catch (e) {
           console.warn(`Skipping ${filepath} at ${commit.oid.substring(0, 7)}:`, e);
         }
       }
 
-      for (const [period, count] of Object.entries(periodCounts)) {
-        data.push({ commit_date: commitDateStr, period, line_count: count });
+      // Record findings for this snapshot
+      for (const [period, count] of Object.entries(snapshotLineAges)) {
+        data.push({ commit_date: commitDateStr, period, line_count: count as number });
       }
     }
 

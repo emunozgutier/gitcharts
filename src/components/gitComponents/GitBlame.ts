@@ -14,6 +14,16 @@ export interface BlameDataPoint {
   line_count: number;
 }
 
+export interface LineHistory {
+  content: string;
+  period: string; // The period this line was first introduced
+}
+
+export interface FileHistory {
+  filename: string;
+  lines: LineHistory[];
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 export function getPeriod(date: Date, granularity: GranularityUnit = 'quarter'): string {
@@ -59,10 +69,45 @@ export function toDateStr(timestampSeconds: number): string {
 }
 
 /**
- * Compare two plaintext file snapshots and attribute each line to the commit
- * where it first appeared.
- *
- * Returns the count of net-new lines introduced in `newerContent`.
+ * Compare an older FileHistory with a newer content string.
+ * Lines preserved from older history keep their original period.
+ * New lines are assigned currentPeriod.
+ */
+export function computeFileHistory(
+  previous: FileHistory | null,
+  currentContent: string,
+  currentPeriod: string,
+  filename: string
+): FileHistory {
+  const currentLines = currentContent.split('\n');
+  const resultLines: LineHistory[] = [];
+
+  // Pool of lines from previous version to match against
+  const pool = previous ? [...previous.lines] : [];
+
+  for (const lineContent of currentLines) {
+    const idx = pool.findIndex(lh => lh.content === lineContent);
+    if (idx !== -1) {
+      // Line preserved, inherit history
+      resultLines.push(pool[idx]);
+      pool.splice(idx, 1);
+    } else {
+      // New line
+      resultLines.push({
+        content: lineContent,
+        period: currentPeriod,
+      });
+    }
+  }
+
+  return {
+    filename,
+    lines: resultLines,
+  };
+}
+
+/**
+ * Legacy pseudoBlame (can be kept if needed for other parts, but our new logic uses computeFileHistory)
  */
 export function pseudoBlame(olderContent: string, newerContent: string): {
   newLineCount: number;
