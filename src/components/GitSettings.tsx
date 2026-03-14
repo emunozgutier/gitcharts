@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 
 interface GitSettingsProps {
   extensions: Record<string, number>;
@@ -14,9 +14,17 @@ interface GitSettingsProps {
   }) => void;
 }
 
+interface FolderNode {
+  name: string;
+  path: string;
+  lines: number;
+  children: FolderNode[];
+}
+
 const GitSettings: React.FC<GitSettingsProps> = ({ extensions, folders, folderLines, timeRange, onAnalyze }) => {
   const [selectedExtensions, setSelectedExtensions] = useState<string[]>([]);
   const [selectedFolders, setSelectedFolders] = useState<string[]>([]);
+  const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
   const [depth, setDepth] = useState<number>(50);
   
   const [minVal, setMinVal] = useState(timeRange.min);
@@ -37,18 +45,67 @@ const GitSettings: React.FC<GitSettingsProps> = ({ extensions, folders, folderLi
     }));
   }, [extensions, totalLines]);
 
-  const sortedFolders = useMemo(() => {
-    return folders
-      .filter(f => f !== '.')
-      .sort((a, b) => (folderLines[b] || 0) - (folderLines[a] || 0));
+  // Build Tree Structure
+  const folderTree = useMemo(() => {
+    const root: FolderNode = { name: 'root', path: '.', lines: 0, children: [] };
+    const folderMap: Record<string, FolderNode> = { '.': root };
+
+    // Sort by path length to ensure parents are handled first (though not strictly necessary with this logic)
+    const sortedPaths = [...folders].sort((a, b) => a.length - b.length);
+
+    for (const path of sortedPaths) {
+      if (path === '.') continue;
+      
+      const parts = path.split('/');
+      let currentPath = '';
+      let parent: FolderNode = root;
+
+      for (let i = 0; i < parts.length; i++) {
+        const part = parts[i];
+        currentPath = currentPath ? `${currentPath}/${part}` : part;
+        
+        if (!folderMap[currentPath]) {
+          const node: FolderNode = { 
+            name: part, 
+            path: currentPath, 
+            lines: folderLines[currentPath] || 0, 
+            children: [] 
+          };
+          folderMap[currentPath] = node;
+          parent.children.push(node);
+        }
+        parent = folderMap[currentPath];
+      }
+    }
+
+    // Aggregate lines recursively (children lines sum up to parent)
+    const aggregateLines = (node: FolderNode): number => {
+      const childrenSum = node.children.reduce((sum, child) => sum + aggregateLines(child), 0);
+      node.lines += childrenSum;
+      return node.lines;
+    };
+    aggregateLines(root);
+
+    // Sort children by aggregated lines
+    const sortNodes = (node: FolderNode) => {
+      node.children.sort((a, b) => b.lines - a.lines);
+      node.children.forEach(sortNodes);
+    };
+    sortNodes(root);
+
+    return root.children;
   }, [folders, folderLines]);
 
-  // Preselect all folders by default when they arrive
-  React.useEffect(() => {
-    if (sortedFolders.length > 0 && selectedFolders.length === 0) {
-      setSelectedFolders(sortedFolders);
+  const topLevelTotalLines = useMemo(() => {
+    return folderTree.reduce((sum, node) => sum + node.lines, 0);
+  }, [folderTree]);
+
+  // Initial Preselection
+  useEffect(() => {
+    if (folders.length > 0 && selectedFolders.length === 0) {
+      setSelectedFolders(folders.filter(f => f !== '.'));
     }
-  }, [sortedFolders]);
+  }, [folders]);
 
   const formatDate = (ts: number) => {
     return new Date(ts * 1000).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
@@ -59,7 +116,7 @@ const GitSettings: React.FC<GitSettingsProps> = ({ extensions, folders, folderLi
   };
 
   const handleMinChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = Math.min(Number(e.target.value), maxVal - 86400); // at least 1 day diff
+    const value = Math.min(Number(e.target.value), maxVal - 86400); // 1 day
     setMinVal(value);
   };
 
@@ -71,8 +128,6 @@ const GitSettings: React.FC<GitSettingsProps> = ({ extensions, folders, folderLi
   const daysInRange = Math.max(1, (maxVal - minVal) / 86400);
   const maxPossiblePoints = Math.floor(daysInRange) + 1;
   const safeMaxPoints = Math.min(200, maxPossiblePoints);
-  
-  // Ensure depth stays within safe limits
   const effectiveDepth = Math.max(2, Math.min(depth, safeMaxPoints));
   const distanceDays = (daysInRange / (effectiveDepth - 1)).toFixed(1);
 
@@ -82,18 +137,86 @@ const GitSettings: React.FC<GitSettingsProps> = ({ extensions, folders, folderLi
     );
   };
 
-  const toggleFolder = (folder: string) => {
-    setSelectedFolders(prev => 
-      prev.includes(folder) ? prev.filter(f => f !== folder) : [...prev, folder]
+  const getAllNestedPaths = (node: FolderNode): string[] => {
+    let paths = [node.path];
+    for (const child of node.children) {
+      paths = [...paths, ...getAllNestedPaths(child)];
+    }
+    return paths;
+  };
+
+  const toggleFolderNode = (node: FolderNode, isChecked: boolean) => {
+    const pathsToToggle = getAllNestedPaths(node);
+    if (isChecked) {
+      setSelectedFolders(prev => [...new Set([...prev, ...pathsToToggle])]);
+    } else {
+      setSelectedFolders(prev => prev.filter(p => !pathsToToggle.includes(p)));
+    }
+  };
+
+  const toggleExpand = (path: string) => {
+    const newExpanded = new Set(expandedFolders);
+    if (newExpanded.has(path)) {
+      newExpanded.delete(path);
+    } else {
+      newExpanded.add(path);
+    }
+    setExpandedFolders(newExpanded);
+  };
+
+  const renderFolderNode = (node: FolderNode, level: number = 0) => {
+    const isExpanded = expandedFolders.has(node.path);
+    const hasChildren = node.children.length > 0;
+    const isChecked = selectedFolders.includes(node.path);
+    const pct = ((node.lines / (topLevelTotalLines || 1)) * 100).toFixed(1);
+
+    return (
+      <div key={node.path} className="folder-node-wrapper">
+        <div 
+          className="folder-node d-flex align-items-center py-1 px-2 rounded-1 hover-bg"
+          style={{ marginLeft: `${level * 16}px` }}
+        >
+          <button 
+            type="button"
+            className={`btn btn-link p-0 me-1 text-decoration-none transition-transform ${isExpanded ? 'rotate-90' : ''}`}
+            style={{ width: '16px', visibility: hasChildren ? 'visible' : 'hidden', color: '#6e7781' }}
+            onClick={() => toggleExpand(node.path)}
+          >
+            ▶
+          </button>
+          
+          <div className="form-check mb-0 d-flex align-items-center flex-grow-1">
+            <input 
+              type="checkbox" 
+              className="form-check-input me-2 mt-0" 
+              checked={isChecked}
+              onChange={(e) => toggleFolderNode(node, e.target.checked)}
+              id={`folder-${node.path}`}
+            />
+            <label className="form-check-label text-truncate small d-flex align-items-center w-100" htmlFor={`folder-${node.path}`} style={{ cursor: 'pointer' }}>
+              <span className="me-2">{hasChildren ? '📂' : '📁'}</span>
+              <span className="flex-grow-1 text-truncate">{node.name}</span>
+              <span className="text-muted opacity-50 smaller ms-2">{pct}%</span>
+            </label>
+          </div>
+        </div>
+        {isExpanded && hasChildren && (
+          <div className="folder-children">
+            {node.children.map(child => renderFolderNode(child, level + 1))}
+          </div>
+        )}
+      </div>
     );
   };
 
   return (
-    <div className="git-settings card shadow-sm p-4 h-100 overflow-auto">
-      <h3 className="h5 mb-4 fw-bold">Analysis Settings</h3>
+    <div className="git-settings card shadow-sm p-4 h-100 overflow-auto border-0">
+      <h3 className="h5 mb-4 fw-bold d-flex align-items-center">
+        <span className="me-2">⚙️</span> Analysis Settings
+      </h3>
       
       <div className="row g-4 mb-4">
-        {/* Time Frame - Column 1 */}
+        {/* Time Frame */}
         <div className="col-12 col-md-6">
           <label className="form-label text-muted small text-uppercase fw-bold mb-4 ls-1 d-block">1. Time Frame</label>
           <div className="range-slider-container px-2">
@@ -133,7 +256,7 @@ const GitSettings: React.FC<GitSettingsProps> = ({ extensions, folders, folderLi
           <div className="text-muted smallest mt-2 px-1">Selected range: <strong>{daysInRange.toFixed(0)} days</strong></div>
         </div>
 
-        {/* Time Points - Column 2 */}
+        {/* Time Points */}
         <div className="col-12 col-md-6 border-start-md ps-md-4">
           <label className="form-label text-muted small text-uppercase fw-bold mb-2 ls-1 d-block">2. Time Points</label>
           <div className="d-flex align-items-center gap-3">
@@ -150,24 +273,24 @@ const GitSettings: React.FC<GitSettingsProps> = ({ extensions, folders, folderLi
           </div>
           <div className="mt-3 p-2 bg-light rounded-3 border border-light">
             <div className="d-flex justify-content-between align-items-center smallest mb-1 text-muted">
-              <span>Status:</span>
+              <span>Density:</span>
               <span className={`fw-bold ${parseFloat(distanceDays) >= 1 ? 'text-success' : 'text-warning'}`}>
-                {parseFloat(distanceDays) >= 1 ? '✓ Optimal distance' : '⚠ High density'}
+                {parseFloat(distanceDays) >= 1 ? '✓ Optimal' : '⚠ High'}
               </span>
             </div>
-            <div className="h6 mb-0 fw-bold">{distanceDays} days <span className="text-muted fw-normal smaller">between points</span></div>
+            <div className="h6 mb-0 fw-bold">{distanceDays} days <span className="text-muted fw-normal smaller">avg spacing</span></div>
           </div>
-          <div className="text-muted smallest mt-2 px-1">Constraint: min 1 day distance.</div>
         </div>
 
+        {/* File Types */}
         <div className="col-12 border-top pt-4">
-          <label className="form-label text-muted small text-uppercase fw-bold mb-3 ls-1 d-block">File Types (Top 5)</label>
+          <label className="form-label text-muted small text-uppercase fw-bold mb-3 ls-1 d-block">3. Code Types (Top 5)</label>
           <div className="d-flex flex-wrap gap-2">
             {topExtensions.map(({ ext, percentage }) => (
               <button
                 key={ext}
                 type="button"
-                className={`btn btn-sm rounded-pill px-3 border transition-all ${selectedExtensions.includes(ext) ? 'btn-primary' : 'btn-outline-secondary'}`}
+                className={`btn btn-sm rounded-pill px-3 border transition-all ${selectedExtensions.includes(ext) ? 'btn-primary shadow-sm' : 'btn-outline-secondary'}`}
                 onClick={() => toggleExtension(ext)}
               >
                 {ext} <span className="opacity-75 ps-1">{percentage}%</span>
@@ -176,32 +299,26 @@ const GitSettings: React.FC<GitSettingsProps> = ({ extensions, folders, folderLi
           </div>
         </div>
 
+        {/* Folder Tree */}
         <div className="col-12 border-top pt-4">
-          <label className="form-label text-muted small text-uppercase fw-bold mb-3 ls-1 d-block">Folders (by size)</label>
-          <div className="list-group list-group-flush border rounded overflow-auto" style={{ maxHeight: '180px' }}>
-            {sortedFolders.map(folder => {
-              const lines = folderLines[folder] || 0;
-              const pct = ((lines / totalLines) * 100).toFixed(1);
-              return (
-                <label key={folder} className="list-group-item list-group-item-action d-flex align-items-center gap-2 py-2 small border-0">
-                  <input
-                    type="checkbox"
-                    className="form-check-input mt-0"
-                    checked={selectedFolders.includes(folder)}
-                    onChange={() => toggleFolder(folder)}
-                  />
-                  <span className="text-truncate flex-grow-1">{folder}</span>
-                  <span className="text-muted opacity-50 smaller">{pct}%</span>
-                </label>
-              );
-            })}
+          <div className="d-flex justify-content-between align-items-center mb-3">
+            <label className="form-label text-muted small text-uppercase fw-bold mb-0 ls-1">4. Folder Hierarchy</label>
+            <button 
+              className="btn btn-link btn-sm text-decoration-none p-0 smallest"
+              onClick={() => setSelectedFolders(selectedFolders.length === folders.length - 1 ? [] : folders.filter(f => f !== '.'))}
+            >
+              {selectedFolders.length === folders.length - 1 ? 'Deselect All' : 'Select All'}
+            </button>
+          </div>
+          <div className="folder-tree-container border rounded bg-white p-2 overflow-auto" style={{ maxHeight: '300px' }}>
+            {folderTree.map(node => renderFolderNode(node))}
           </div>
         </div>
       </div>
 
       <div className="mt-auto pt-3 border-top">
         <button 
-          className="btn btn-primary w-100 fw-bold py-2 rounded-pill shadow-sm"
+          className="btn btn-primary btn-lg w-100 fw-bold py-3 rounded-pill shadow"
           onClick={() => onAnalyze({
             selectedExtensions,
             selectedFolders,
@@ -210,15 +327,21 @@ const GitSettings: React.FC<GitSettingsProps> = ({ extensions, folders, folderLi
             endDate: toISODate(maxVal)
           })}
         >
-          Start Analysis
+          Start Archaeology Analysis
         </button>
       </div>
 
       <style>{`
-        .ls-1 { letter-spacing: 0.05em; }
-        .smallest { font-size: 0.75rem; }
-        .git-settings { background: #fdfdfd; border: 1px solid rgba(0,0,0,0.02); }
+        .ls-1 { letter-spacing: 0.1em; }
+        .smallest { font-size: 0.7rem; }
+        .hover-bg:hover { background-color: #f8f9fa; }
+        .rotate-90 { transform: rotate(90deg); }
+        .transition-transform { transition: transform 0.15s ease; }
         .transition-all { transition: all 0.2s ease; }
+        
+        .folder-node button { font-size: 0.6rem; display: flex; align-items: center; justify-content: center; }
+        .folder-tree-container::-webkit-scrollbar { width: 6px; }
+        .folder-tree-container::-webkit-scrollbar-thumb { background: #dee2e6; border-radius: 3px; }
         
         @media (min-width: 768px) {
           .border-start-md { border-left: 1px solid #dee2e6 !important; }
@@ -237,7 +360,7 @@ const GitSettings: React.FC<GitSettingsProps> = ({ extensions, folders, folderLi
           background-color: #0d6efd;
           border: 2px solid #fff;
           border-radius: 50%;
-          box-shadow: 0 0 1px 1px #ced4da;
+          box-shadow: 0 0 4px rgba(0,0,0,0.1);
           cursor: pointer;
           height: 18px;
           width: 18px;
@@ -250,7 +373,7 @@ const GitSettings: React.FC<GitSettingsProps> = ({ extensions, folders, folderLi
           background-color: #0d6efd;
           border: 2px solid #fff;
           border-radius: 50%;
-          box-shadow: 0 0 1px 1px #ced4da;
+          box-shadow: 0 0 4px rgba(0,0,0,0.1);
           cursor: pointer;
           height: 18px;
           width: 18px;
