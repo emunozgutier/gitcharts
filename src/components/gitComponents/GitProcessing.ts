@@ -1,23 +1,6 @@
 /**
- * GitProcessing.ts
- *
- * High-level analysis logic that sits on top of GitDownload.ts.
- *
- * Core feature: **Pseudo Git Blame**
- *
- * Because isomorphic-git doesn't expose a `git blame` command in the browser,
- * we simulate it by comparing consecutive file snapshots:
- *
- *   1. Read file content at commit N   → "old lines" (Set)
- *   2. Read file content at commit N-1 → "current lines"
- *   3. Any line in "current" that also exists in "old" was already present →
- *      it originated in or before commit N.
- *   4. Remove matched lines from "old" (so each line is only attributed once).
- *   5. Lines that remain in "current" but weren't in "old" are NEW lines
- *      introduced at commit N-1.
- *
- * This gives us a per-commit line count breakdown, which maps directly to the
- * BlameDataPoint structure consumed by the Vega chart.
+ * GitProcessing.ts - REWRITTEN FROM SCRATCH
+ * Following the provided Python snippet structure.
  */
 
 import {
@@ -31,10 +14,10 @@ import {
 import {
   type GranularityUnit,
   type BlameDataPoint,
-  type FileHistory,
+  type FileLinesPreserved,
   getPeriod,
   toDateStr,
-  computeFileHistory,
+  get_file_lines_preserved,
 } from './GitBlame';
 
 const IGNORED_EXTENSIONS = [
@@ -47,9 +30,6 @@ function isCodeFile(filename: string): boolean {
   return !IGNORED_EXTENSIONS.some(ext => lower.endsWith(ext));
 }
 
-
-// ── Main class ────────────────────────────────────────────────────────────────
-
 export class GitArchaeology {
   public repoUrl: string;
   public dir: string;
@@ -59,14 +39,144 @@ export class GitArchaeology {
     this.dir = `/${repoFullName}`;
   }
 
-  /**
-   * Run the pseudo-blame archaeology process.
-   *
-   * For each sampled source file we walk through commit history (oldest →
-   * newest) and attribute line counts to the quarter in which those lines first
-   * appeared.
-   */
+  async run(
+    onProgress?: (progress: string) => void,
+    options?: { 
+      extensions?: string[]; 
+      folders?: string[]; 
+      skipClone?: boolean;
+      depth?: number;
+      startDate?: string;
+      endDate?: string;
+      granularity?: GranularityUnit;
+    }
+  ): Promise<BlameDataPoint[]> {
+    if (!options?.skipClone) {
+        await cloneRepo({
+          dir: this.dir,
+          repoUrl: this.repoUrl,
+          depth: 100,
+          onProgress: (msg) => onProgress && onProgress(msg),
+        });
+    }
 
+    const depth = options?.depth || 50;
+    let commits = await readCommitLog(this.dir, depth);
+
+    // Apply date filters if provided
+    if (options?.startDate || options?.endDate) {
+      const start = options.startDate ? new Date(options.startDate).getTime() : 0;
+      const end = options.endDate ? new Date(options.endDate).getTime() : Infinity;
+      
+      commits = commits.filter(c => {
+        const ts = c.timestamp * 1000;
+        return ts >= start && ts <= end;
+      });
+    }
+
+    const ordered = [...commits].reverse();
+
+    // ── Logic from Python snippet ──────────────────────────────────────────
+    
+    // data: Dict(date, List[FileLinesPreserved]) = {}
+    const data: Record<string, FileLinesPreserved[]> = {}; 
+    let previousDate: string | null = null;
+
+    for (let i = 0; i < ordered.length; i++) {
+        const commit = ordered[i];
+        
+        // date0 = get_date(time_point_list[i])
+        const date0 = toDateStr(commit.timestamp);
+        const period0 = getPeriod(new Date(commit.timestamp * 1000), options?.granularity);
+
+        if (onProgress) onProgress(`Processing ${date0} (${i + 1}/${ordered.length})...`);
+
+        // allFilesOnDate0 = get_all_files(date0)
+        // (In our case, we get files for the specific commit)
+        let files = await listAllFiles(this.dir, commit.oid);
+        files = files.filter(f => {
+            if (options?.extensions && options.extensions.length > 0) {
+                return options.extensions.some(ext => f.toLowerCase().endsWith(ext.toLowerCase()));
+            }
+            return isCodeFile(f);
+        });
+        if (options?.folders && options.folders.length > 0) {
+            files = files.filter(f => options.folders!.some(folder => f.startsWith(folder)));
+        }
+
+        // Sampling for performance
+        const sampledFiles = files.slice(0, 15);
+
+        // data[date0] = get_all_file_lines(date0)
+        const currentFileList: FileLinesPreserved[] = [];
+        for (const filepath of sampledFiles) {
+            try {
+                const content = await withTimeout(
+                    readFileAtCommit(this.dir, commit.oid, filepath),
+                    15_000,
+                    `Reading ${filepath}`
+                );
+                if (content !== null) {
+                    currentFileList.push({
+                        filename: filepath,
+                        filelines: content.split('\n').map(line => ({ content: line, period: period0 }))
+                    });
+                }
+            } catch {}
+        }
+        data[date0] = currentFileList;
+
+        if (i > 0 && previousDate !== null) {
+            // currentFiles = list(map(lambda x: x.filename), data[date0])
+            const currentFiles = data[date0].map(x => x.filename);
+
+            // for previousFileLinesPreservedList in data[previousDate]:
+            // (Assuming data[previousDate] is the list of FileLinesPreserved)
+            const previousList = data[previousDate];
+            for (const previousFileLinesPreserved of previousList) {
+                // fileName = previousFileLinesPerserved.filename
+                const fileName = previousFileLinesPreserved.filename;
+                
+                // if fileName in currentFiles:
+                if (currentFiles.includes(fileName)) {
+                    // currentFileLinePreserved = filter(lambda x: x.filename == fileName, data[date0])[0]
+                    const currentFileLinePreserved = data[date0].find(x => x.filename === fileName);
+                    
+                    if (currentFileLinePreserved) {
+                        // currentFileLinePreserved = GitBlame.get_file_lines_preserved(previousFileLinesPerserved, currentFileLinePreserved)
+                        const updated = get_file_lines_preserved(previousFileLinesPreserved, currentFileLinePreserved, period0);
+                        
+                        // Update in place in data[date0]
+                        const idx = data[date0].findIndex(x => x.filename === fileName);
+                        if (idx !== -1) data[date0][idx] = updated;
+                    }
+                }
+            }
+        }
+
+        previousDate = date0;
+    }
+
+    // Convert data back to BlameDataPoint format for the chart
+    const results: BlameDataPoint[] = [];
+    for (const [date, fileList] of Object.entries(data)) {
+        const counts: Record<string, number> = {};
+        for (const file of fileList) {
+            for (const line of file.filelines) {
+                counts[line.period] = (counts[line.period] || 0) + 1;
+            }
+        }
+        for (const [period, count] of Object.entries(counts)) {
+            results.push({ commit_date: date, period, line_count: count });
+        }
+    }
+
+    return results.sort((a, b) => a.commit_date.localeCompare(b.commit_date));
+  }
+
+  async runLegacy(onProgress?: (progress: string) => void): Promise<BlameDataPoint[]> {
+    return this.run(onProgress);
+  }
 
   /**
    * Scans the latest commit to get an overview of file types (by line count) and folders.
@@ -122,132 +232,5 @@ export class GitArchaeology {
       folderLines: foldersLines,
       timeRange: { min: minTime, max: maxTime },
     };
-  }
-
-  /**
-   * Run the pseudo-blame archaeology process.
-   */
-  async run(
-    onProgress?: (progress: string) => void,
-    options?: { 
-      extensions?: string[]; 
-      folders?: string[]; 
-      skipClone?: boolean;
-      depth?: number;
-      startDate?: string;
-      endDate?: string;
-      granularity?: GranularityUnit;
-    }
-  ): Promise<BlameDataPoint[]> {
-    // ── 1. Clone (if not skipped) ───────────────────────────────────────────
-    if (!options?.skipClone) {
-      if (onProgress) onProgress('Initializing local filesystem...');
-      await cloneRepo({
-        dir: this.dir,
-        repoUrl: this.repoUrl,
-        depth: 100,
-        onProgress: (msg) => onProgress && onProgress(msg),
-      });
-    }
-
-    // ── 2. Commit log ───────────────────────────────────────────────────────
-    const depth = options?.depth || 50;
-    let commits = await readCommitLog(this.dir, depth);
-
-    // Apply date filters if provided
-    if (options?.startDate || options?.endDate) {
-      const start = options.startDate ? new Date(options.startDate).getTime() : 0;
-      const end = options.endDate ? new Date(options.endDate).getTime() : Infinity;
-      
-      commits = commits.filter(c => {
-        const ts = c.timestamp * 1000;
-        return ts >= start && ts <= end;
-      });
-    }
-
-    const ordered = [...commits].reverse();
-    console.log(`[GitProcessing] Found ${ordered.length} commits to analyze.`);
-
-    if (onProgress) onProgress(`Analyzing ${ordered.length} commits...`);
-
-    const data: BlameDataPoint[] = [];
-    const repoHistory = new Map<string, FileHistory>(); // Tracks the line-by-line history of each file
-
-    // ── 3. Per-commit analysis ──────────────────────────────────────────────
-    for (let i = 0; i < ordered.length; i++) {
-      const commit = ordered[i];
-      const commitDateStr = toDateStr(commit.timestamp);
-      const commitPeriod = getPeriod(new Date(commit.timestamp * 1000), options?.granularity);
-
-      if (onProgress) {
-        onProgress(`Analyzing snapshot ${i + 1}/${ordered.length}: ${commit.oid.substring(0, 7)}...`);
-      }
-
-      let filesAtCommit = await withTimeout(
-        listAllFiles(this.dir, commit.oid),
-        30_000,
-        `Listing files at ${commit.oid.substring(0, 7)}`
-      );
-
-      // Filter out non-code files unless specifically requested
-      filesAtCommit = filesAtCommit.filter(f => {
-        if (options?.extensions && options.extensions.length > 0) {
-          return options.extensions.some(ext => f.toLowerCase().endsWith(ext.toLowerCase()));
-        }
-        return isCodeFile(f);
-      });
-
-      // Apply folder filters
-      if (options?.folders && options.folders.length > 0) {
-        filesAtCommit = filesAtCommit.filter(f => options.folders!.some(folder => f.startsWith(folder)));
-      }
-      
-      const files = filesAtCommit;
-
-      // Sample to avoid hitting browser memory limits for huge repos
-      // But let's be more generous than 5, say 15
-      const sampledFiles = files.slice(0, 15);
-      
-      console.log(`[GitProcessing] commit ${commit.oid.substring(0,7)} (${commitPeriod}): ${files.length} matching files, sampling ${sampledFiles.length}`);
-
-      const snapshotLineAges: Record<string, number> = {}; // Aggregates line ages for the current commit snapshot
-
-      for (const filepath of sampledFiles) {
-        try {
-          const content = await withTimeout(
-            readFileAtCommit(this.dir, commit.oid, filepath),
-            15_000,
-            `Reading ${filepath} at ${commit.oid.substring(0, 7)}`
-          );
-          if (content === null) continue;
-
-          const previousHistory = repoHistory.get(filepath) || null;
-          const updatedHistory = computeFileHistory(previousHistory, content, commitPeriod, filepath);
-          repoHistory.set(filepath, updatedHistory);
-
-          // Aggregate line ages for THIS snapshot
-          for (const line of updatedHistory.lines) {
-            snapshotLineAges[line.period] = (snapshotLineAges[line.period] || 0) + 1;
-          }
-        } catch (e) {
-          console.warn(`Skipping ${filepath} at ${commit.oid.substring(0, 7)}:`, e);
-        }
-      }
-
-      // Record findings for this snapshot
-      for (const [period, count] of Object.entries(snapshotLineAges)) {
-        data.push({ commit_date: commitDateStr, period, line_count: count as number });
-      }
-    }
-
-    return data.sort((a, b) => a.commit_date.localeCompare(b.commit_date));
-  }
-
-  /**
-   * Legacy entry-point kept for backwards compatibility.
-   * Delegates to `run()`.
-   */
-  async runLegacy(onProgress?: (progress: string) => void): Promise<BlameDataPoint[]> {
-    return this.run(onProgress);
   }
 }

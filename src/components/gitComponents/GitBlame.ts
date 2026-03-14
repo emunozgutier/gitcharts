@@ -19,9 +19,9 @@ export interface LineHistory {
   period: string; // The period this line was first introduced
 }
 
-export interface FileHistory {
+export interface FileLinesPreserved {
   filename: string;
-  lines: LineHistory[];
+  filelines: LineHistory[];
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -69,45 +69,43 @@ export function toDateStr(timestampSeconds: number): string {
 }
 
 /**
- * Compare an older FileHistory with a newer content string.
+ * Compare an older FileLinesPreserved with a newer content string.
  * Lines preserved from older history keep their original period.
  * New lines are assigned currentPeriod.
  */
-export function computeFileHistory(
-  previous: FileHistory | null,
-  currentContent: string,
-  currentPeriod: string,
-  filename: string
-): FileHistory {
-  const currentLines = currentContent.split('\n');
+export function get_file_lines_preserved(
+  previous: FileLinesPreserved | null,
+  current: FileLinesPreserved,
+  currentPeriod: string
+): FileLinesPreserved {
   const resultLines: LineHistory[] = [];
 
   // Pool of lines from previous version to match against
-  const pool = previous ? [...previous.lines] : [];
+  const pool = previous ? [...previous.filelines] : [];
 
-  for (const lineContent of currentLines) {
-    const idx = pool.findIndex(lh => lh.content === lineContent);
+  for (const currentLine of current.filelines) {
+    const idx = pool.findIndex(lh => lh.content === currentLine.content);
     if (idx !== -1) {
       // Line preserved, inherit history
       resultLines.push(pool[idx]);
       pool.splice(idx, 1);
     } else {
-      // New line
+      // New line (assigned current period)
       resultLines.push({
-        content: lineContent,
+        content: currentLine.content,
         period: currentPeriod,
       });
     }
   }
 
   return {
-    filename,
-    lines: resultLines,
+    filename: current.filename,
+    filelines: resultLines,
   };
 }
 
 /**
- * Legacy pseudoBlame (can be kept if needed for other parts, but our new logic uses computeFileHistory)
+ * Legacy pseudoBlame (kept for reference, not used in main scratch rewrite)
  */
 export function pseudoBlame(olderContent: string, newerContent: string): {
   newLineCount: number;
