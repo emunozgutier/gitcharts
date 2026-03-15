@@ -1,0 +1,10 @@
+[
+  "datasette",
+  "diskcache",
+  "django",
+  "marimo",
+  "narwhals",
+  "scikit-lego",
+  "sentence-transformers",
+  "wandb"
+]
