@@ -274,7 +274,7 @@ const GitSettings: React.FC<GitSettingsProps> = ({ extensions, folders, folderLi
           <label className="form-label text-muted small text-uppercase fw-bold mb-4 ls-1 d-block">1. Time Frame</label>
           
           {/* Histogram */}
-          <div className="histogram-container position-relative mb-1 d-flex align-items-end px-2" style={{ height: '60px', gap: '1px' }}>
+          <div className="histogram-container position-relative mb-0 d-flex align-items-end px-2" style={{ height: '60px', gap: '1px' }}>
             {histogramData.map((d, i) => (
               <div 
                 key={i}
@@ -284,27 +284,9 @@ const GitSettings: React.FC<GitSettingsProps> = ({ extensions, folders, folderLi
               />
             ))}
           </div>
-          
-          {/* Histogram Axis Labels */}
-          <div className="histogram-axis position-relative mb-2 px-2" style={{ height: '20px' }}>
-            {histogramTicks.map((tick, i) => (
-              <span 
-                key={i} 
-                className="position-absolute text-primary fw-bold smallest bg-primary bg-opacity-10 px-2 py-0.5 rounded-pill" 
-                style={{ 
-                  left: `${tick.position}%`, 
-                  transform: i === 0 ? 'translateX(0%)' : 'translateX(-100%)',
-                  whiteSpace: 'nowrap',
-                  zIndex: 5
-                }}
-              >
-                {tick.label}
-              </span>
-            ))}
-          </div>
 
-          <div className="range-slider-container px-2">
-            <div className="dual-range-wrapper position-relative" style={{ height: '40px' }}>
+          <div className="range-slider-container px-2 pb-3">
+            <div className="dual-range-wrapper position-relative" style={{ height: '35px', marginTop: '-14px' }}>
               <input
                 type="range"
                 min={timeRange.min}
@@ -331,6 +313,24 @@ const GitSettings: React.FC<GitSettingsProps> = ({ extensions, folders, folderLi
                   width: `${((maxVal - minVal) / (timeRange.max - timeRange.min)) * 100}%`
                 }}
               ></div>
+            </div>
+
+            {/* Histogram Axis Labels (at the bottom) */}
+            <div className="histogram-axis position-relative mt-2 px-2" style={{ height: '20px' }}>
+              {histogramTicks.map((tick, i) => (
+                <span 
+                  key={i} 
+                  className="position-absolute text-primary fw-bold smallest bg-primary bg-opacity-10 px-2 py-0.5 rounded-pill" 
+                  style={{ 
+                    left: `${tick.position}%`, 
+                    transform: i === 0 ? 'translateX(0%)' : 'translateX(-100%)',
+                    whiteSpace: 'nowrap',
+                    zIndex: 5
+                  }}
+                >
+                  {tick.label}
+                </span>
+              ))}
             </div>
           </div>
           <div className="text-muted smallest mt-2 px-1">Selected range: <strong>{daysInRange.toFixed(0)} days</strong></div>
@@ -443,27 +443,26 @@ const GitSettings: React.FC<GitSettingsProps> = ({ extensions, folders, folderLi
         }
         .thumb::-webkit-slider-thumb {
           background-color: #0d6efd;
-          border: 2px solid #fff;
-          border-radius: 50%;
-          box-shadow: 0 0 4px rgba(0,0,0,0.1);
           cursor: pointer;
-          height: 18px;
-          width: 18px;
-          margin-top: 4px;
+          height: 14px;
+          width: 16px;
+          margin-top: 15px; /* Closer to the track but doesn't touch */
           pointer-events: all;
           position: relative;
           -webkit-appearance: none;
+          clip-path: polygon(50% 0%, 0% 100%, 100% 100%);
+          border: none;
         }
         .thumb::-moz-range-thumb {
           background-color: #0d6efd;
-          border: 2px solid #fff;
-          border-radius: 50%;
-          box-shadow: 0 0 4px rgba(0,0,0,0.1);
           cursor: pointer;
-          height: 18px;
-          width: 18px;
+          height: 14px;
+          width: 16px;
           pointer-events: all;
           position: relative;
+          border: none;
+          clip-path: polygon(50% 0%, 0% 100%, 100% 100%);
+          transform: translateY(13px); /* Closer to the track but doesn't touch */
         }
         .slider-track-bg {
           position: absolute;
