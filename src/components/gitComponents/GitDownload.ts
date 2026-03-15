@@ -119,22 +119,11 @@ export async function readCommitLog(dir: string, depth = 50): Promise<CommitEntr
 
 // ── File listing ──────────────────────────────────────────────────────────────
 
-const SOURCE_EXT = /\.(py|js|ts|tsx|java)$/;
-
 /**
  * Lists all files present at a given commit OID.
  */
 export async function listAllFiles(dir: string, oid: string): Promise<string[]> {
   return await git.listFiles({ fs, dir, ref: oid });
-}
-
-/**
- * Lists source files present at a given commit OID, filtered to common
- * programming-language extensions.
- */
-export async function listSourceFiles(dir: string, oid: string): Promise<string[]> {
-  const all = await listAllFiles(dir, oid);
-  return all.filter((f) => SOURCE_EXT.test(f));
 }
 
 // ── Blob reading ──────────────────────────────────────────────────────────────

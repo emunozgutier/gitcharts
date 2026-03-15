@@ -9,8 +9,6 @@ import {
   listAllFiles,
   readFileAtCommit,
   withTimeout,
-  // @ts-ignore
-  cloneRepo as _cloneRepo,
 } from './GitDownload';
 
 import {
@@ -251,10 +249,6 @@ export class GitArchaeology {
     return this.GetFilesLInesThatSurvivedOnEachPeriod(snapshotData);
   }
 
-
-  async runLegacy(onProgress?: (progress: string) => void): Promise<BlameDataPoint[]> {
-    return this.run(onProgress);
-  }
 
   async scanRepo(): Promise<{ 
     extensions: Record<string, number>; 
