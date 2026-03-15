@@ -176,22 +176,13 @@ const GitSettings: React.FC<GitSettingsProps> = ({ extensions, folders, folderLi
   }, [commitTimestamps, timeRange.min, timeRange.max, minVal, maxVal]);
 
   const histogramTicks = useMemo(() => {
-    if (histogramData.length === 0) return [];
-    
-    // Choose about 4-6 labels to display
-    const numLabels = 5;
-    const ticks = [];
-    if (histogramData.length > 0) {
-      for (let i = 0; i < numLabels; i++) {
-        const idx = Math.floor(i * (histogramData.length - 1) / (numLabels - 1));
-        ticks.push({
-          label: histogramData[idx].date,
-          position: (idx / (histogramData.length - 1)) * 100
-        });
-      }
-    }
-    return ticks;
-  }, [histogramData]);
+    // We'll show the current selection labels at the bottom instead of sampled ticks
+    // to keep the focus on the "time frame" as requested.
+    return [
+      { label: formatDate(minVal), position: ((minVal - timeRange.min) / (timeRange.max - timeRange.min)) * 100 },
+      { label: formatDate(maxVal), position: ((maxVal - timeRange.min) / (timeRange.max - timeRange.min)) * 100 }
+    ];
+  }, [minVal, maxVal, timeRange.min, timeRange.max]);
 
   const toggleExtension = (ext: string) => {
     setSelectedExtensions(prev => 
@@ -295,15 +286,16 @@ const GitSettings: React.FC<GitSettingsProps> = ({ extensions, folders, folderLi
           </div>
           
           {/* Histogram Axis Labels */}
-          <div className="histogram-axis position-relative mb-3 px-2" style={{ height: '14px' }}>
+          <div className="histogram-axis position-relative mb-2 px-2" style={{ height: '20px' }}>
             {histogramTicks.map((tick, i) => (
               <span 
                 key={i} 
-                className="position-absolute text-muted smallest" 
+                className="position-absolute text-primary fw-bold smallest bg-primary bg-opacity-10 px-2 py-0.5 rounded-pill" 
                 style={{ 
                   left: `${tick.position}%`, 
-                  transform: i === 0 ? 'none' : i === histogramTicks.length - 1 ? 'translateX(-100%)' : 'translateX(-50%)',
-                  whiteSpace: 'nowrap'
+                  transform: i === 0 ? 'translateX(0%)' : 'translateX(-100%)',
+                  whiteSpace: 'nowrap',
+                  zIndex: 5
                 }}
               >
                 {tick.label}
@@ -312,10 +304,6 @@ const GitSettings: React.FC<GitSettingsProps> = ({ extensions, folders, folderLi
           </div>
 
           <div className="range-slider-container px-2">
-            <div className="range-slider-labels d-flex justify-content-between mb-3">
-              <span className="small fw-bold text-primary bg-primary bg-opacity-10 px-2 py-1 rounded-pill">{formatDate(minVal)}</span>
-              <span className="small fw-bold text-primary bg-primary bg-opacity-10 px-2 py-1 rounded-pill">{formatDate(maxVal)}</span>
-            </div>
             <div className="dual-range-wrapper position-relative" style={{ height: '40px' }}>
               <input
                 type="range"
