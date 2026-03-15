@@ -17,6 +17,7 @@ import {
   type GranularityUnit,
   type BlameDataPoint,
   type FileLinesPreserved,
+  type LineHistory,
   getPeriod,
   toDateStr,
 } from './GitBlame';
@@ -161,6 +162,79 @@ export class GitArchaeology {
     return { data, timePoints };
   }
 
+  private GetLinesThatSurvived(fileBefore: FileLinesPreserved, fileAfter: FileLinesPreserved): [number, FileLinesPreserved] {
+    const survivingLines: LineHistory[] = [];
+    const notFoundLines: LineHistory[] = [];
+    const pool = [...fileBefore.filelines];
+
+    for (const line of fileAfter.filelines) {
+      const idx = pool.findIndex(pl => pl.content === line.content);
+      if (idx !== -1) {
+        survivingLines.push(pool[idx]);
+        pool.splice(idx, 1);
+      } else {
+        notFoundLines.push(line);
+      }
+    }
+
+    return [
+      survivingLines.length,
+      {
+        filename: fileAfter.filename,
+        filelines: notFoundLines
+      }
+    ];
+  }
+
+  private GetFilesLInesThatSurvivedOnEachPeriod(
+    snapshotData: { data: Record<string, FileLinesPreserved[]> }
+  ): BlameDataPoint[] {
+    const { data } = snapshotData;
+    const results: BlameDataPoint[] = [];
+    const dateKeys = Object.keys(data).sort();
+    
+    // For each snapshot J, we find where its lines came from by checking 0 to J-1
+    for (let j = 0; j < dateKeys.length; j++) {
+        const currentDate = dateKeys[j];
+        const currentFileList = data[currentDate];
+
+        if (!currentFileList) continue;
+
+        const counts: Record<string, number> = {};
+        // Initialize counts for all dates (periods) seen up to now to 0
+        for (let k = 0; k <= j; k++) {
+            counts[dateKeys[k]] = 0;
+        }
+
+        for (const currentFile of currentFileList) {
+            let fileToProcess = { ...currentFile, filelines: [...currentFile.filelines] };
+
+            // Check against ALL previous snapshots in order
+            for (let i = 0; i < j; i++) {
+                const prevDate = dateKeys[i];
+                const prevFileList = data[prevDate];
+                const prevFile = prevFileList.find(f => f.filename === currentFile.filename);
+
+                if (prevFile && fileToProcess.filelines.length > 0) {
+                    const [countUpdate, remainingFile] = this.GetLinesThatSurvived(prevFile, fileToProcess);
+                    counts[prevDate] += countUpdate;
+                    fileToProcess = remainingFile;
+                }
+            }
+
+            // Finally, any lines that never appeared in any previous batch
+            // are attributed to the current batch
+            counts[currentDate] += fileToProcess.filelines.length;
+        }
+
+        for (const [period, count] of Object.entries(counts)) {
+            results.push({ commit_date: currentDate, period, line_count: count });
+        }
+    }
+
+    return results.sort((a, b) => a.commit_date.localeCompare(b.commit_date));
+  }
+
   async run(
     onProgress?: (progress: string) => void,
     options?: { 
@@ -173,78 +247,10 @@ export class GitArchaeology {
       granularity?: GranularityUnit;
     }
   ): Promise<BlameDataPoint[]> {
-    const { data, timePoints } = await this.GetFileLinesPerPeriod(onProgress, options);
-
-
-    // Convert data back to BlameDataPoint format with MANUAL MULTI-PASS attribution
-    const results: BlameDataPoint[] = [];
-    const dateKeys = Object.keys(data).sort();
-    
-    // We need a mapping of date -> period for attribution
-    // timePoints should match dateKeys length and order
-    const dateToPeriod: Record<string, string> = {};
-    for (let k = 0; k < timePoints.length; k++) {
-        const d = toDateStr(timePoints[k]);
-        dateToPeriod[d] = getPeriod(new Date(timePoints[k] * 1000), options?.granularity);
-    }
-
-    // For each snapshot J, we find where its lines came from by checking 0 to J-1
-    for (let j = 0; j < dateKeys.length; j++) {
-        const currentDate = dateKeys[j];
-        const currentFileList = data[currentDate];
-        const currentPeriod = dateToPeriod[currentDate];
-
-        if (!currentFileList) continue;
-
-        const counts: Record<string, number> = {};
-        // Initialize counts for all periods seen up to now to 0 for continuous traces
-        for (let k = 0; k <= j; k++) {
-            const p = dateToPeriod[dateKeys[k]];
-            counts[p] = 0;
-        }
-
-        for (const currentFile of currentFileList) {
-            // Pool of lines that we haven't assigned to a "surviving from previous batch" yet
-            let remainingLines = [...currentFile.filelines];
-
-            // 1. Check against ALL previous snapshots in order (Batch 1, then Batch 2...)
-            for (let i = 0; i < j; i++) {
-                const prevDate = dateKeys[i];
-                const prevFileList = data[prevDate];
-                const prevFile = prevFileList.find(f => f.filename === currentFile.filename);
-                const prevPeriod = dateToPeriod[prevDate];
-
-                if (prevFile && remainingLines.length > 0) {
-                    const nextRemaining: any[] = [];
-                    const prevLinesPool = [...prevFile.filelines];
-
-                    for (const line of remainingLines) {
-                        const matchIdx = prevLinesPool.findIndex(pl => pl.content === line.content);
-                        if (matchIdx !== -1) {
-                            // Line existed in period 'prevPeriod'
-                            counts[prevPeriod]++;
-                            // Remove from pool so it's not matched again in THIS snapshot
-                            prevLinesPool.splice(matchIdx, 1);
-                        } else {
-                            nextRemaining.push(line);
-                        }
-                    }
-                    remainingLines = nextRemaining;
-                }
-            }
-
-            // 2. Finally, any lines that never appeared in any previous batch (0 to J-1)
-            // are attributed to the current batch (J)
-            counts[currentPeriod] += remainingLines.length;
-        }
-
-        for (const [period, count] of Object.entries(counts)) {
-            results.push({ commit_date: currentDate, period, line_count: count });
-        }
-    }
-
-    return results.sort((a, b) => a.commit_date.localeCompare(b.commit_date));
+    const snapshotData = await this.GetFileLinesPerPeriod(onProgress, options);
+    return this.GetFilesLInesThatSurvivedOnEachPeriod(snapshotData);
   }
+
 
   async runLegacy(onProgress?: (progress: string) => void): Promise<BlameDataPoint[]> {
     return this.run(onProgress);
