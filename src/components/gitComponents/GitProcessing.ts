@@ -75,35 +75,53 @@ export class GitArchaeology {
       });
     }
 
-    // Sampling: If we have more commits than requested points, sample them evenly
-    let sampledCommits = commits;
-    if (commits.length > requestedPoints) {
-      sampledCommits = [];
+    // Generate evenly spaced time points (snapshots) based on requested depth
+    const startTs = options?.startDate ? new Date(options.startDate + 'T00:00:00.000Z').getTime() / 1000 : Math.min(...commits.map(c => c.timestamp));
+    const endTs = options?.endDate ? new Date(options.endDate + 'T23:59:59.000Z').getTime() / 1000 : Math.max(...commits.map(c => c.timestamp));
+    
+    const timePoints: number[] = [];
+    if (requestedPoints > 1) {
+      const step = (endTs - startTs) / (requestedPoints - 1);
       for (let i = 0; i < requestedPoints; i++) {
-        const index = Math.floor(i * (commits.length - 1) / (requestedPoints - 1));
-        sampledCommits.push(commits[index]);
+        timePoints.push(startTs + i * step);
       }
+    } else {
+      timePoints.push(endTs);
     }
 
-    const ordered = [...sampledCommits].reverse();
-
-    // ── Logic from Python snippet ──────────────────────────────────────────
-    
     // data: Dict(date, List[FileLinesPreserved]) = {}
     const data: Record<string, FileLinesPreserved[]> = {}; 
+    let previousResult: FileLinesPreserved[] | null = null;
+    let previousCommitHash: string | null = null;
     let previousDate: string | null = null;
 
-    for (let i = 0; i < ordered.length; i++) {
-        const commit = ordered[i];
+    for (let i = 0; i < timePoints.length; i++) {
+        const snapshotTs = timePoints[i];
+        const date0 = toDateStr(snapshotTs);
+        const period0 = getPeriod(new Date(snapshotTs * 1000), options?.granularity);
+
+        // Find the latest commit at or before this snapshot time
+        const commit = commits.find(c => c.timestamp <= snapshotTs);
         
-        // date0 = get_date(time_point_list[i])
-        const date0 = toDateStr(commit.timestamp);
-        const period0 = getPeriod(new Date(commit.timestamp * 1000), options?.granularity);
+        if (!commit) {
+            // No commits yet at this time point
+            data[date0] = [];
+            continue;
+        }
 
-        if (onProgress) onProgress(`Processing ${date0} (${i + 1}/${ordered.length})...`);
+        if (onProgress) onProgress(`Processing SNAPSHOT ${date0} (${i + 1}/${timePoints.length})...`);
 
-        // allFilesOnDate0 = get_all_files(date0)
-        // (In our case, we get files for the specific commit)
+        // OPTIMIZATION: If same commit as previous snapshot, reuse analysis
+        if (commit.oid === previousCommitHash && previousResult !== null && previousDate !== null) {
+            // We still need to create a new entry for this date0, but we can reuse the lines
+            // However, the "period" for new lines depends on the current snapshot's period0.
+            // But since it's the SAME commit, no new lines were added between previousDate and date0.
+            data[date0] = previousResult;
+            previousDate = date0;
+            continue;
+        }
+
+        // List and filter files
         let files = await listAllFiles(this.dir, commit.oid);
         files = files.filter(f => {
             if (options?.extensions && options.extensions.length > 0) {
@@ -115,11 +133,9 @@ export class GitArchaeology {
             files = files.filter(f => options.folders!.some(folder => f.startsWith(folder)));
         }
 
-        // Sampling for performance
         const sampledFiles = files.slice(0, 15);
-
-        // data[date0] = get_all_file_lines(date0)
         const currentFileList: FileLinesPreserved[] = [];
+
         for (const filepath of sampledFiles) {
             try {
                 const content = await withTimeout(
@@ -128,43 +144,37 @@ export class GitArchaeology {
                     `Reading ${filepath}`
                 );
                 if (content !== null) {
+                    // EXCLUDE EMPTY LINES
+                    const lines = content.split('\n')
+                        .filter(line => line.trim().length > 0) // MUST be a WHOLE number of days... wait, no, "except from empty lines"
+                        .map(line => ({ content: line, period: period0 }));
+
                     currentFileList.push({
                         filename: filepath,
-                        filelines: content.split('\n').map(line => ({ content: line, period: period0 }))
+                        filelines: lines
                     });
                 }
             } catch {}
         }
-        data[date0] = currentFileList;
 
-        if (i > 0 && previousDate !== null) {
-            // currentFiles = list(map(lambda x: x.filename), data[date0])
-            const currentFiles = data[date0].map(x => x.filename);
-
-            // for previousFileLinesPreservedList in data[previousDate]:
-            // (Assuming data[previousDate] is the list of FileLinesPreserved)
-            const previousList = data[previousDate];
-            for (const previousFileLinesPreserved of previousList) {
-                // fileName = previousFileLinesPerserved.filename
-                const fileName = previousFileLinesPreserved.filename;
-                
-                // if fileName in currentFiles:
-                if (currentFiles.includes(fileName)) {
-                    // currentFileLinePreserved = filter(lambda x: x.filename == fileName, data[date0])[0]
-                    const currentFileLinePreserved = data[date0].find(x => x.filename === fileName);
-                    
-                    if (currentFileLinePreserved) {
-                        // currentFileLinePreserved = GitBlame.get_file_lines_preserved(previousFileLinesPerserved, currentFileLinePreserved)
-                        const updated = get_file_lines_preserved(previousFileLinesPreserved, currentFileLinePreserved, period0);
-                        
-                        // Update in place in data[date0]
-                        const idx = data[date0].findIndex(x => x.filename === fileName);
-                        if (idx !== -1) data[date0][idx] = updated;
-                    }
+        // Apply preservation logic from previous snapshot
+        if (previousResult !== null) {
+            const currentFilesMap = new Map(currentFileList.map(f => [f.filename, f]));
+            
+            for (const prevFile of previousResult) {
+                const currentFile = currentFilesMap.get(prevFile.filename);
+                if (currentFile) {
+                    const updated = get_file_lines_preserved(prevFile, currentFile, period0);
+                    // Update in the list
+                    const idx = currentFileList.findIndex(f => f.filename === prevFile.filename);
+                    if (idx !== -1) currentFileList[idx] = updated;
                 }
             }
         }
 
+        data[date0] = currentFileList;
+        previousResult = currentFileList;
+        previousCommitHash = commit.oid;
         previousDate = date0;
     }
 
