@@ -205,8 +205,13 @@ export class GitArchaeology {
     
     const latestOid = commits[0].oid;
     const commitTimestamps = commits.map(c => c.timestamp);
-    const minTime = Math.min(...commitTimestamps);
-    const maxTime = Math.max(...commitTimestamps);
+    
+    // Align to UTC day boundaries: start of first day, end of last day
+    const minRaw = Math.min(...commitTimestamps);
+    const maxRaw = Math.max(...commitTimestamps);
+    
+    const minTime = Math.floor(minRaw / 86400) * 86400;
+    const maxTime = Math.ceil(maxRaw / 86400) * 86400 - 1; // End of the day
 
     const allFiles = await listAllFiles(this.dir, latestOid);
     const files = allFiles.filter(isCodeFile);

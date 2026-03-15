@@ -118,7 +118,7 @@ const GitSettings: React.FC<GitSettingsProps> = ({ extensions, folders, folderLi
   }, [folders]);
 
   const formatDate = (ts: number) => {
-    return new Date(ts * 1000).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+    return new Date(ts * 1000).toISOString().split('T')[0];
   };
   
   const toISODate = (ts: number) => {
@@ -126,12 +126,12 @@ const GitSettings: React.FC<GitSettingsProps> = ({ extensions, folders, folderLi
   };
 
   const handleMinChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = Math.min(Number(e.target.value), maxVal - 86400); // 1 day
+    const value = Math.min(Number(e.target.value), maxVal - 60); // 1 minute buffer instead of 1 day
     setMinVal(value);
   };
 
   const handleMaxChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = Math.max(Number(e.target.value), minVal + 86400);
+    const value = Math.max(Number(e.target.value), minVal + 60);
     setMaxVal(value);
   };
 
