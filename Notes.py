@@ -35,4 +35,6 @@ def GetFilesLinesTahtSurvivedOnEachPeriod(periodFileLinesList):
             fileCurrentPeriod = getFile(fileName, period1)
             for fileName in getFiles(previousPeriod):
                 filePreviousPeriod = getFile(fileName, period0)
-                count, linesLeft = GetLinesThatSurvived(file0, file1)
+                countUpdate, fileCurrentPeriod = GetLinesThatSurvived(file0, file1)
+                dataToPlot[currentPeriod][previousPeriod] += countUpdate
+    return dataToPlot
