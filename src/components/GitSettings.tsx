@@ -14,6 +14,7 @@ interface GitSettingsProps {
     endDate: string;
     granularity: GranularityUnit;
   }) => void;
+  commitTimestamps: number[];
 }
 
 interface FolderNode {
@@ -23,7 +24,7 @@ interface FolderNode {
   children: FolderNode[];
 }
 
-const GitSettings: React.FC<GitSettingsProps> = ({ extensions, folders, folderLines, timeRange, onAnalyze }) => {
+const GitSettings: React.FC<GitSettingsProps> = ({ extensions, folders, folderLines, timeRange, commitTimestamps, onAnalyze }) => {
   const [selectedExtensions, setSelectedExtensions] = useState<string[]>([]);
   const [selectedFolders, setSelectedFolders] = useState<string[]>([]);
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
@@ -139,6 +140,58 @@ const GitSettings: React.FC<GitSettingsProps> = ({ extensions, folders, folderLi
   const safeMaxPoints = Math.min(200, maxPossiblePoints);
   const effectiveDepth = Math.max(2, Math.min(depth, safeMaxPoints));
   const distanceDays = (daysInRange / (effectiveDepth - 1)).toFixed(1);
+  
+  const commitsInRange = useMemo(() => {
+    return commitTimestamps.filter(ts => ts >= minVal && ts <= maxVal).length;
+  }, [commitTimestamps, minVal, maxVal]);
+
+  const histogramData = useMemo(() => {
+    if (commitTimestamps.length === 0) return [];
+    
+    // Group into buckets (daily)
+    const start = Math.floor(timeRange.min / 86400) * 86400;
+    const end = Math.ceil(timeRange.max / 86400) * 86400;
+    const numDays = Math.max(1, Math.ceil((end - start) / 86400));
+    
+    const buckets = new Array(numDays).fill(0);
+    for (const ts of commitTimestamps) {
+      const idx = Math.floor((ts - start) / 86400);
+      if (idx >= 0 && idx < numDays) {
+        buckets[idx]++;
+      }
+    }
+    
+    const maxCommits = Math.max(...buckets, 1);
+    
+    return buckets.map((count, i) => {
+      const ts = start + i * 86400;
+      return {
+        timestamp: ts,
+        count,
+        height: (count / maxCommits) * 100,
+        date: new Date(ts * 1000).toISOString().split('T')[0],
+        inRange: ts >= minVal && ts <= maxVal
+      };
+    });
+  }, [commitTimestamps, timeRange.min, timeRange.max, minVal, maxVal]);
+
+  const histogramTicks = useMemo(() => {
+    if (histogramData.length === 0) return [];
+    
+    // Choose about 4-6 labels to display
+    const numLabels = 5;
+    const ticks = [];
+    if (histogramData.length > 0) {
+      for (let i = 0; i < numLabels; i++) {
+        const idx = Math.floor(i * (histogramData.length - 1) / (numLabels - 1));
+        ticks.push({
+          label: histogramData[idx].date,
+          position: (idx / (histogramData.length - 1)) * 100
+        });
+      }
+    }
+    return ticks;
+  }, [histogramData]);
 
   const toggleExtension = (ext: string) => {
     setSelectedExtensions(prev => 
@@ -228,6 +281,36 @@ const GitSettings: React.FC<GitSettingsProps> = ({ extensions, folders, folderLi
         {/* Time Frame */}
         <div className="col-12 col-md-6">
           <label className="form-label text-muted small text-uppercase fw-bold mb-4 ls-1 d-block">1. Time Frame</label>
+          
+          {/* Histogram */}
+          <div className="histogram-container position-relative mb-1 d-flex align-items-end px-2" style={{ height: '60px', gap: '1px' }}>
+            {histogramData.map((d, i) => (
+              <div 
+                key={i}
+                className={`histogram-bar flex-grow-1 ${d.inRange ? 'bg-primary' : 'bg-secondary opacity-25'}`}
+                style={{ height: `${Math.max(4, d.height)}%`, transition: 'all 0.2s ease', borderRadius: '1px 1px 0 0' }}
+                title={`${d.date}: ${d.count} commits`}
+              />
+            ))}
+          </div>
+          
+          {/* Histogram Axis Labels */}
+          <div className="histogram-axis position-relative mb-3 px-2" style={{ height: '14px' }}>
+            {histogramTicks.map((tick, i) => (
+              <span 
+                key={i} 
+                className="position-absolute text-muted smallest" 
+                style={{ 
+                  left: `${tick.position}%`, 
+                  transform: i === 0 ? 'none' : i === histogramTicks.length - 1 ? 'translateX(-100%)' : 'translateX(-50%)',
+                  whiteSpace: 'nowrap'
+                }}
+              >
+                {tick.label}
+              </span>
+            ))}
+          </div>
+
           <div className="range-slider-container px-2">
             <div className="range-slider-labels d-flex justify-content-between mb-3">
               <span className="small fw-bold text-primary bg-primary bg-opacity-10 px-2 py-1 rounded-pill">{formatDate(minVal)}</span>
@@ -282,12 +365,15 @@ const GitSettings: React.FC<GitSettingsProps> = ({ extensions, folders, folderLi
           </div>
           <div className="mt-3 p-2 bg-light rounded-3 border border-light">
             <div className="d-flex justify-content-between align-items-center smallest mb-1 text-muted">
-              <span>Density:</span>
+              <span>Timeline Stats:</span>
               <span className={`fw-bold ${parseFloat(distanceDays) >= 1 ? 'text-success' : 'text-warning'}`}>
                 {parseFloat(distanceDays) >= 1 ? '✓ Optimal' : '⚠ High'}
               </span>
             </div>
-            <div className="h6 mb-0 fw-bold">{distanceDays} days <span className="text-muted fw-normal smaller">avg spacing</span></div>
+            <div className="d-flex justify-content-between align-items-center">
+                <div className="h6 mb-0 fw-bold">{distanceDays} days <span className="text-muted fw-normal smaller">avg spacing</span></div>
+                <div className="h6 mb-0 fw-bold">{commitsInRange} <span className="text-muted fw-normal smaller">commits</span></div>
+            </div>
           </div>
         </div>
 
@@ -407,6 +493,12 @@ const GitSettings: React.FC<GitSettingsProps> = ({ extensions, folders, folderLi
           background-color: #0d6efd;
           top: 11px;
           z-index: 2;
+        }
+
+        .histogram-bar:hover {
+          background-color: #0a58ca !important;
+          opacity: 1 !important;
+          transform: scaleY(1.1);
         }
       `}</style>
     </div>

@@ -17,6 +17,7 @@ export interface RepoInfo {
   folders: string[];
   folderLines: Record<string, number>;
   timeRange: { min: number; max: number };
+  commitTimestamps: number[];
 }
 
 export interface AnalysisResult {

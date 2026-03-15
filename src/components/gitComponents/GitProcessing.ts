@@ -55,18 +55,19 @@ export class GitArchaeology {
         await cloneRepo({
           dir: this.dir,
           repoUrl: this.repoUrl,
-          depth: 100,
+          depth: 2000,
           onProgress: (msg) => onProgress && onProgress(msg),
         });
     }
 
-    const depth = options?.depth || 50;
-    let commits = await readCommitLog(this.dir, depth);
+    const requestedPoints = options?.depth || 50;
+    const fetchDepth = Math.max(2000, requestedPoints * 2); 
+    let commits = await readCommitLog(this.dir, fetchDepth);
 
     // Apply date filters if provided
     if (options?.startDate || options?.endDate) {
-      const start = options.startDate ? new Date(options.startDate).getTime() : 0;
-      const end = options.endDate ? new Date(options.endDate).getTime() : Infinity;
+      const start = options.startDate ? new Date(options.startDate + 'T00:00:00.001Z').getTime() : 0;
+      const end = options.endDate ? new Date(options.endDate + 'T23:59:59.999Z').getTime() : Infinity;
       
       commits = commits.filter(c => {
         const ts = c.timestamp * 1000;
@@ -74,7 +75,17 @@ export class GitArchaeology {
       });
     }
 
-    const ordered = [...commits].reverse();
+    // Sampling: If we have more commits than requested points, sample them evenly
+    let sampledCommits = commits;
+    if (commits.length > requestedPoints) {
+      sampledCommits = [];
+      for (let i = 0; i < requestedPoints; i++) {
+        const index = Math.floor(i * (commits.length - 1) / (requestedPoints - 1));
+        sampledCommits.push(commits[index]);
+      }
+    }
+
+    const ordered = [...sampledCommits].reverse();
 
     // ── Logic from Python snippet ──────────────────────────────────────────
     
@@ -186,15 +197,16 @@ export class GitArchaeology {
     folders: string[]; 
     folderLines: Record<string, number>;
     timeRange: { min: number; max: number };
+    commitTimestamps: number[];
   }> {
-    const depth = 100;
+    const depth = 5000;
     const commits = await readCommitLog(this.dir, depth);
     if (commits.length === 0) throw new Error("No commits found");
     
     const latestOid = commits[0].oid;
-    const timestamps = commits.map(c => c.timestamp);
-    const minTime = Math.min(...timestamps);
-    const maxTime = Math.max(...timestamps);
+    const commitTimestamps = commits.map(c => c.timestamp);
+    const minTime = Math.min(...commitTimestamps);
+    const maxTime = Math.max(...commitTimestamps);
 
     const allFiles = await listAllFiles(this.dir, latestOid);
     const files = allFiles.filter(isCodeFile);
@@ -231,6 +243,7 @@ export class GitArchaeology {
       folders: Object.keys(foldersLines).sort(),
       folderLines: foldersLines,
       timeRange: { min: minTime, max: maxTime },
+      commitTimestamps: commitTimestamps,
     };
   }
 }

@@ -134,6 +134,7 @@ const GitArchaeologyDisplay: React.FC<GitArchaeologyDisplayProps> = ({
             folders={repoInfo.folders} 
             folderLines={repoInfo.folderLines}
             timeRange={repoInfo.timeRange}
+            commitTimestamps={repoInfo.commitTimestamps}
             onAnalyze={handleStartAnalysis} 
           />
         )}
