@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import embed from 'vega-embed';
-import { type BlameDataPoint } from './gitComponents/GitBlame';
+import { type BlameDataPoint } from './gitComponents/GitProcessing';
 
 interface GitChartProps {
   data: BlameDataPoint[];

@@ -1,6 +1,6 @@
 import React, { useEffect, useCallback } from 'react';
 import { GitArchaeology } from './gitComponents/GitProcessing';
-import { type GranularityUnit } from './gitComponents/GitBlame';
+import { type GranularityUnit } from './gitComponents/GitProcessing';
 import { cloneRepo } from './gitComponents/GitDownload';
 import GitStatusDisplay from './GitStatusDisplay';
 import GitChart from './GitChart';

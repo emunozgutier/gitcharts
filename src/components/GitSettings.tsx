@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { type GranularityUnit } from './gitComponents/GitBlame';
+import { type GranularityUnit } from './gitComponents/GitProcessing';
 
 interface GitSettingsProps {
   extensions: Record<string, number>;
