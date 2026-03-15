@@ -9,22 +9,22 @@ interface GitStatusDisplayProps {
 const GitStatusDisplay: React.FC<GitStatusDisplayProps> = ({ stats, progress, loading }) => {
   return (
     <div className="d-flex align-items-center">
-      <div className="stats-card d-flex gap-3 me-3 text-light">
+      <div className="stats-card d-flex gap-3 me-3 text-light align-items-center">
         {stats ? (
           <>
-            <div className="text-end">
-              <div className="text-light opacity-50 fw-bold ls-1" style={{ fontSize: '0.65rem' }}>SIZE</div>
-              <div className="fw-bold small">{Math.round(stats.size / 1024)} MB</div>
+            <div className="d-flex align-items-baseline gap-2">
+              <span className="text-light opacity-50 fw-bold ls-1" style={{ fontSize: '0.6rem' }}>SIZE</span>
+              <span className="fw-bold small">{Math.round(stats.size / 1024)}MB</span>
             </div>
-            <div className="vr bg-light opacity-25" style={{ height: '24px' }}></div>
-            <div className="text-end">
-              <div className="text-light opacity-50 fw-bold ls-1" style={{ fontSize: '0.65rem' }}>LANG</div>
-              <div className="fw-bold small">{stats.language || 'N/A'}</div>
+            <div className="vr bg-light opacity-25" style={{ height: '16px' }}></div>
+            <div className="d-flex align-items-baseline gap-2">
+              <span className="text-light opacity-50 fw-bold ls-1" style={{ fontSize: '0.6rem' }}>LANG</span>
+              <span className="fw-bold small ">{stats.language || 'N/A'}</span>
             </div>
-            <div className="vr bg-light opacity-25" style={{ height: '24px' }}></div>
-            <div className="text-end">
-              <div className="text-light opacity-50 fw-bold ls-1" style={{ fontSize: '0.65rem' }}>FORKS</div>
-              <div className="fw-bold small">{stats.forks.toLocaleString()}</div>
+            <div className="vr bg-light opacity-25" style={{ height: '16px' }}></div>
+            <div className="d-flex align-items-baseline gap-2">
+              <span className="text-light opacity-50 fw-bold ls-1" style={{ fontSize: '0.6rem' }}>FORKS</span>
+              <span className="fw-bold small">{stats.forks.toLocaleString()}</span>
             </div>
           </>
         ) : (

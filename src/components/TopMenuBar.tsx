@@ -11,11 +11,11 @@ const TopMenuBar: React.FC<TopMenuBarProps> = ({ selectedRepo, onRepoSelect }) =
   const { stats, progress, analysisState } = useRepoStore();
 
   return (
-    <nav className="navbar navbar-expand-lg navbar-dark bg-dark shadow-sm py-2 sticky-top">
-      <div className="container-fluid px-4">
+    <nav className="navbar navbar-expand-lg navbar-dark bg-dark shadow-sm py-1 sticky-top">
+      <div className="container-fluid px-3">
         <div className="d-flex align-items-center w-100">
           <a 
-            className="navbar-brand fw-bold mb-0 d-flex align-items-center me-4" 
+            className="navbar-brand fw-bold mb-0 d-flex align-items-center me-3" 
             href="#" 
             onClick={(e) => {
               e.preventDefault();
@@ -23,8 +23,8 @@ const TopMenuBar: React.FC<TopMenuBarProps> = ({ selectedRepo, onRepoSelect }) =
             }} 
             style={{ cursor: 'pointer', textDecoration: 'none' }}
           >
-            <span className="me-2">🏛️</span>
-            <span>GitCharts</span>
+            <span className="me-2" style={{ fontSize: '0.9rem' }}>🏛️</span>
+            <span style={{ fontSize: '0.9rem' }}>GitCharts</span>
           </a>
 
           <div className="flex-grow-1" style={{ maxWidth: '600px' }}>
