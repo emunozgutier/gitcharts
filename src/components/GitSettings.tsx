@@ -168,7 +168,6 @@ const GitSettings: React.FC<GitSettingsProps> = ({ extensions, folders, folderLi
         maxVal={maxVal}
         setMinVal={setMinVal}
         setMaxVal={setMaxVal}
-        depth={depth}
         setDepth={setDepth}
         safeMaxPoints={safeMaxPoints}
         effectiveDepth={effectiveDepth}

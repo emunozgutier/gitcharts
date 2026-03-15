@@ -6,7 +6,6 @@ interface TimeFrameAndPointsProps {
   maxVal: number;
   setMinVal: (val: number) => void;
   setMaxVal: (val: number) => void;
-  depth: number;
   setDepth: (val: number) => void;
   safeMaxPoints: number;
   effectiveDepth: number;
@@ -21,7 +20,6 @@ const TimeFrameAndPoints: React.FC<TimeFrameAndPointsProps> = ({
   maxVal,
   setMinVal,
   setMaxVal,
-  depth,
   setDepth,
   safeMaxPoints,
   effectiveDepth,
