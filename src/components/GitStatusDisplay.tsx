@@ -8,35 +8,39 @@ interface GitStatusDisplayProps {
 
 const GitStatusDisplay: React.FC<GitStatusDisplayProps> = ({ stats, progress, loading }) => {
   return (
-    <div className="d-flex justify-content-between align-items-center mb-1">
-      <div className="stats-card d-flex gap-4">
+    <div className="d-flex align-items-center">
+      <div className="stats-card d-flex gap-3 me-3 text-light">
         {stats ? (
           <>
-            <div>
-              <div className="text-muted small text-uppercase fw-bold ls-1">Size</div>
-              <div className="h5 mb-0 fw-bold">{Math.round(stats.size / 1024)} MB</div>
+            <div className="text-end">
+              <div className="text-light opacity-50 fw-bold ls-1" style={{ fontSize: '0.65rem' }}>SIZE</div>
+              <div className="fw-bold small">{Math.round(stats.size / 1024)} MB</div>
             </div>
-            <div className="vr"></div>
-            <div>
-              <div className="text-muted small text-uppercase fw-bold ls-1">Language</div>
-              <div className="h5 mb-0 fw-bold">{stats.language || 'N/A'}</div>
+            <div className="vr bg-light opacity-25" style={{ height: '24px' }}></div>
+            <div className="text-end">
+              <div className="text-light opacity-50 fw-bold ls-1" style={{ fontSize: '0.65rem' }}>LANG</div>
+              <div className="fw-bold small">{stats.language || 'N/A'}</div>
             </div>
-            <div className="vr"></div>
-            <div>
-              <div className="text-muted small text-uppercase fw-bold ls-1">Forks</div>
-              <div className="h5 mb-0 fw-bold">{stats.forks.toLocaleString()}</div>
+            <div className="vr bg-light opacity-25" style={{ height: '24px' }}></div>
+            <div className="text-end">
+              <div className="text-light opacity-50 fw-bold ls-1" style={{ fontSize: '0.65rem' }}>FORKS</div>
+              <div className="fw-bold small">{stats.forks.toLocaleString()}</div>
             </div>
           </>
         ) : (
-          <div className="text-muted">Loading repository statistics...</div>
+          <div className="text-light opacity-50 small">Loading stats...</div>
         )}
       </div>
       {(loading || progress) && (
-        <div className="d-flex align-items-center gap-2">
-          <div className="spinner-border spinner-border-sm text-primary"></div>
-          <span className="small text-muted">{progress || 'Syncing...'}</span>
+        <div className="d-flex align-items-center gap-2 bg-dark bg-opacity-50 px-3 py-1 rounded-pill border border-secondary">
+          <div className="spinner-border spinner-border-sm text-primary" style={{ width: '0.75rem', height: '0.75rem' }}></div>
+          <span className="smallest text-light opacity-75">{progress || 'Syncing...'}</span>
         </div>
       )}
+      <style>{`
+        .ls-1 { letter-spacing: 0.05em; }
+        .smallest { font-size: 0.7rem; }
+      `}</style>
     </div>
   );
 };

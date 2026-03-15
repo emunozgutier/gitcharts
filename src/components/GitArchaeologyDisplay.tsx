@@ -2,7 +2,6 @@ import React, { useEffect, useCallback } from 'react';
 import { GitArchaeology } from './gitComponents/GitProcessing';
 import { type GranularityUnit } from './gitComponents/GitProcessing';
 import { cloneRepo } from './gitComponents/GitDownload';
-import GitStatusDisplay from './GitStatusDisplay';
 import GitChart from './GitChart';
 import GitSettings from './GitSettings';
 import { useRepoStore } from '../store/useRepoStore';
@@ -121,13 +120,7 @@ const GitArchaeologyDisplay: React.FC<GitArchaeologyDisplayProps> = ({
 
   return (
     <div className="d-flex flex-column h-100 w-100">
-      <GitStatusDisplay 
-        stats={stats} 
-        progress={progress} 
-        loading={state === 'CLONING' || state === 'ANALYZING'} 
-      />
-
-      <div className="flex-grow-1 position-relative overflow-hidden mt-2">
+      <div className="flex-grow-1 position-relative overflow-hidden">
         {state === 'SETTINGS' && repoInfo && (
           <GitSettings 
             extensions={repoInfo.extensions} 

@@ -1,5 +1,6 @@
-import React from 'react';
 import SearchBar from './TopMenuBar/SearchBar';
+import GitStatusDisplay from './GitStatusDisplay';
+import { useRepoStore } from '../store/useRepoStore';
 
 interface TopMenuBarProps {
   selectedRepo: string;
@@ -7,28 +8,36 @@ interface TopMenuBarProps {
 }
 
 const TopMenuBar: React.FC<TopMenuBarProps> = ({ selectedRepo, onRepoSelect }) => {
+  const { stats, progress, analysisState } = useRepoStore();
+
   return (
-    <nav className="navbar navbar-expand-lg navbar-dark bg-dark shadow-sm py-2">
-      <div className="container-fluid px-4 d-flex align-items-center justify-content-between">
-        <a 
-          className="navbar-brand fw-bold mb-0 d-flex align-items-center" 
-          href="#" 
-          onClick={(e) => {
-            e.preventDefault();
-            onRepoSelect(null);
-          }} 
-          style={{ cursor: 'pointer', textDecoration: 'none' }}
-        >
-          <span className="me-2">🏛️</span>
-          <span>GitCharts <span className="text-primary">Archaeology</span></span>
-        </a>
-        <div className="flex-grow-1 mx-4" style={{ maxWidth: '800px' }}>
-          <SearchBar onSelect={onRepoSelect} initialValue={selectedRepo} isMinimal />
-        </div>
-        <div className="text-light d-none d-md-block">
-          <span className="badge bg-secondary rounded-pill px-3 py-2 border border-secondary">
-            {selectedRepo}
-          </span>
+    <nav className="navbar navbar-expand-lg navbar-dark bg-dark shadow-sm py-2 sticky-top">
+      <div className="container-fluid px-4">
+        <div className="d-flex align-items-center w-100">
+          <a 
+            className="navbar-brand fw-bold mb-0 d-flex align-items-center me-4" 
+            href="#" 
+            onClick={(e) => {
+              e.preventDefault();
+              onRepoSelect(null);
+            }} 
+            style={{ cursor: 'pointer', textDecoration: 'none' }}
+          >
+            <span className="me-2">🏛️</span>
+            <span>GitCharts</span>
+          </a>
+
+          <div className="flex-grow-1" style={{ maxWidth: '600px' }}>
+            <SearchBar onSelect={onRepoSelect} initialValue={selectedRepo} isMinimal />
+          </div>
+
+          <div className="ms-auto">
+            <GitStatusDisplay 
+              stats={stats} 
+              progress={progress} 
+              loading={analysisState === 'CLONING' || analysisState === 'ANALYZING'} 
+            />
+          </div>
         </div>
       </div>
       <style>{`

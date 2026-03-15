@@ -46,20 +46,23 @@ const SearchBar: React.FC<SearchBarProps> = ({ onSelect, initialValue = '', isMi
     setLastSearched(searchTerm);
 
     try {
-      const response = await fetch(
-        `https://api.github.com/search/repositories?q=${encodeURIComponent(searchTerm)}&sort=stars&order=desc&per_page=5`
-      );
+      const fetchResults = async (q: string) => {
+        const response = await fetch(
+          `https://api.github.com/search/repositories?q=${encodeURIComponent(q)}&sort=stars&order=desc&per_page=5`
+        );
+        if (response.status === 403) throw new Error('Rate limit exceeded.');
+        if (!response.ok) throw new Error(`API error: ${response.statusText}`);
+        const data = await response.json();
+        return data.items || [];
+      };
 
-      if (response.status === 403) {
-        throw new Error('Rate limit exceeded.');
+      let items = await fetchResults(searchTerm);
+      
+      // Fallback: if no results and query doesn't look like a "user/repo" yet, try as a user filter
+      if (items.length === 0 && !searchTerm.includes('/')) {
+        items = await fetchResults(`user:${searchTerm}`);
       }
 
-      if (!response.ok) {
-        throw new Error(`API error: ${response.statusText}`);
-      }
-
-      const data = await response.json();
-      const items = data.items || [];
       setResults(items);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error');
@@ -90,8 +93,8 @@ const SearchBar: React.FC<SearchBarProps> = ({ onSelect, initialValue = '', isMi
 
   return (
     <div className={`search-bar-wrapper ${isMinimal ? 'minimal' : ''}`}>
-      <div className={`input-group ${isMinimal ? 'input-group-sm' : 'input-group-lg'}`}>
-        <span className="input-group-text bg-white border-end-0">🔍</span>
+      <div className={`input-group ${isMinimal ? 'input-group-sm dark-search-group' : 'input-group-lg'}`}>
+        <span className="input-group-text border-end-0">🔍</span>
         <input
           type="text"
           className="form-control border-start-0"
@@ -100,7 +103,7 @@ const SearchBar: React.FC<SearchBarProps> = ({ onSelect, initialValue = '', isMi
           onChange={(e) => setQuery(e.target.value)}
         />
         {loading && (
-          <span className="input-group-text bg-white border-start-0">
+          <span className="input-group-text border-start-0">
             <div className="spinner-border spinner-border-sm text-primary" role="status"></div>
           </span>
         )}
@@ -139,7 +142,36 @@ const SearchBar: React.FC<SearchBarProps> = ({ onSelect, initialValue = '', isMi
       <style>{`
         .search-bar-wrapper { position: relative; }
         .minimal { max-width: 100% !important; }
-        .search-results-overlay { max-height: 300px; overflow-y: auto; }
+        .search-results-overlay { 
+          max-height: 300px; 
+          overflow-y: auto; 
+          background: #2b3035; 
+          border: 1px solid #495057;
+        }
+        .search-results-overlay .list-group-item {
+          background: #2b3035;
+          color: #dee2e6;
+          border-color: #495057;
+        }
+        .search-results-overlay .list-group-item:hover {
+          background: #343a40;
+          color: #fff;
+        }
+        .dark-search-group .input-group-text, 
+        .dark-search-group .form-control {
+          background-color: rgba(255, 255, 255, 0.1);
+          border-color: rgba(255, 255, 255, 0.2);
+          color: white;
+        }
+        .dark-search-group .form-control::placeholder {
+          color: rgba(255, 255, 255, 0.5);
+        }
+        .dark-search-group .form-control:focus {
+          background-color: rgba(255, 255, 255, 0.15);
+          border-color: rgba(255, 255, 255, 0.3);
+          color: white;
+          box-shadow: none;
+        }
       `}</style>
     </div>
   );
