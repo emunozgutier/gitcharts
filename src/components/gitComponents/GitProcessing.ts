@@ -17,7 +17,6 @@ import {
   type FileLinesPreserved,
   getPeriod,
   toDateStr,
-  get_file_lines_preserved,
 } from './GitBlame';
 
 const IGNORED_EXTENSIONS = [
@@ -76,50 +75,32 @@ export class GitArchaeology {
     }
 
     // Generate evenly spaced time points (snapshots) based on requested depth
-    const startTs = options?.startDate ? new Date(options.startDate + 'T00:00:00.000Z').getTime() / 1000 : Math.min(...commits.map(c => c.timestamp));
-    const endTs = options?.endDate ? new Date(options.endDate + 'T23:59:59.000Z').getTime() / 1000 : Math.max(...commits.map(c => c.timestamp));
-    
-    const timePoints: number[] = [];
-    if (requestedPoints > 1) {
-      const step = (endTs - startTs) / (requestedPoints - 1);
-      for (let i = 0; i < requestedPoints; i++) {
-        timePoints.push(startTs + i * step);
-      }
-    } else {
-      timePoints.push(endTs);
+    // 1. Identify all unique periods and their latest commits in the range
+    const startTs = options?.startDate ? new Date(options.startDate + 'T00:00:00.000Z').getTime() / 1000 : 0;
+    const endTs = options?.endDate ? new Date(options.endDate + 'T23:59:59.000Z').getTime() / 1000 : Infinity;
+
+    const periodMap = new Map<string, { ts: number, oid: string }>();
+    for (const c of commits) {
+        if (c.timestamp < startTs || c.timestamp > endTs) continue;
+        
+        const p = getPeriod(new Date(c.timestamp * 1000), options?.granularity);
+        const existing = periodMap.get(p);
+        if (!existing || c.timestamp > existing.ts) {
+            periodMap.set(p, { ts: c.timestamp, oid: c.oid });
+        }
     }
 
-    // data: Dict(date, List[FileLinesPreserved]) = {}
-    const data: Record<string, FileLinesPreserved[]> = {}; 
-    let previousResult: FileLinesPreserved[] | null = null;
-    let previousCommitHash: string | null = null;
-    let previousDate: string | null = null;
+    const sortedPeriods = Array.from(periodMap.keys()).sort();
+    
+    // 2. We process these periods as our "Batches"
+    // data: Record<periodLabel, FileLinesPreserved[]>
+    const snapshotsData: Record<string, FileLinesPreserved[]> = {};
 
-    for (let i = 0; i < timePoints.length; i++) {
-        const snapshotTs = timePoints[i];
-        const date0 = toDateStr(snapshotTs);
-        const period0 = getPeriod(new Date(snapshotTs * 1000), options?.granularity);
+    for (let i = 0; i < sortedPeriods.length; i++) {
+        const periodLabel = sortedPeriods[i];
+        const commit = periodMap.get(periodLabel)!;
 
-        // Find the latest commit at or before this snapshot time
-        const commit = commits.find(c => c.timestamp <= snapshotTs);
-        
-        if (!commit) {
-            // No commits yet at this time point
-            data[date0] = [];
-            continue;
-        }
-
-        if (onProgress) onProgress(`Processing SNAPSHOT ${date0} (${i + 1}/${timePoints.length})...`);
-
-        // OPTIMIZATION: If same commit as previous snapshot, reuse analysis
-        if (commit.oid === previousCommitHash && previousResult !== null && previousDate !== null) {
-            // We still need to create a new entry for this date0, but we can reuse the lines
-            // However, the "period" for new lines depends on the current snapshot's period0.
-            // But since it's the SAME commit, no new lines were added between previousDate and date0.
-            data[date0] = previousResult;
-            previousDate = date0;
-            continue;
-        }
+        if (onProgress) onProgress(`Processing BATCH ${periodLabel} (${i + 1}/${sortedPeriods.length})...`);
 
         // List and filter files
         let files = await listAllFiles(this.dir, commit.oid);
@@ -134,7 +115,6 @@ export class GitArchaeology {
         }
 
         const currentFileList: FileLinesPreserved[] = [];
-
         for (const filepath of files) {
             try {
                 const content = await withTimeout(
@@ -143,10 +123,9 @@ export class GitArchaeology {
                     `Reading ${filepath}`
                 );
                 if (content !== null) {
-                    // EXCLUDE EMPTY LINES
                     const lines = content.split('\n')
-                        .filter(line => line.trim().length > 0) // MUST be a WHOLE number of days... wait, no, "except from empty lines"
-                        .map(line => ({ content: line, period: period0 }));
+                        .filter(line => line.trim().length > 0)
+                        .map(line => ({ content: line, period: periodLabel }));
 
                     currentFileList.push({
                         filename: filepath,
@@ -155,39 +134,63 @@ export class GitArchaeology {
                 }
             } catch {}
         }
-
-        // Apply preservation logic from previous snapshot
-        if (previousResult !== null) {
-            const currentFilesMap = new Map(currentFileList.map(f => [f.filename, f]));
-            
-            for (const prevFile of previousResult) {
-                const currentFile = currentFilesMap.get(prevFile.filename);
-                if (currentFile) {
-                    const updated = get_file_lines_preserved(prevFile, currentFile, period0);
-                    // Update in the list
-                    const idx = currentFileList.findIndex(f => f.filename === prevFile.filename);
-                    if (idx !== -1) currentFileList[idx] = updated;
-                }
-            }
-        }
-
-        data[date0] = currentFileList;
-        previousResult = currentFileList;
-        previousCommitHash = commit.oid;
-        previousDate = date0;
+        snapshotsData[periodLabel] = currentFileList;
     }
 
-    // Convert data back to BlameDataPoint format for the chart
+    // 3. Multi-pass attribution for each batch
     const results: BlameDataPoint[] = [];
-    for (const [date, fileList] of Object.entries(data)) {
+
+    for (let j = 0; j < sortedPeriods.length; j++) {
+        const currentPeriod = sortedPeriods[j];
+        const currentFileList = snapshotsData[currentPeriod];
+        
+        // Date to show on the X axis (last day of the period)
+        const commitTs = periodMap.get(currentPeriod)!.ts;
+        const snapshotDateStr = toDateStr(commitTs);
+
         const counts: Record<string, number> = {};
-        for (const file of fileList) {
-            for (const line of file.filelines) {
-                counts[line.period] = (counts[line.period] || 0) + 1;
-            }
+        // Initialize counts for ALL periods seen so far to 0 (for continuous traces)
+        for (let k = 0; k <= j; k++) {
+            counts[sortedPeriods[k]] = 0;
         }
+
+        for (const currentFile of currentFileList) {
+            let remainingLines = [...currentFile.filelines];
+
+            // Compare against each PREVIOUS batch sequentially (Batch 1, then Batch 2...)
+            for (let i = 0; i < j; i++) {
+                const prevPeriod = sortedPeriods[i];
+                const prevFileList = snapshotsData[prevPeriod];
+                const prevFile = prevFileList.find(f => f.filename === currentFile.filename);
+
+                if (prevFile && remainingLines.length > 0) {
+                    const nextRemaining: any[] = [];
+                    const prevLinesPool = [...prevFile.filelines];
+
+                    for (const line of remainingLines) {
+                        const matchIdx = prevLinesPool.findIndex(pl => pl.content === line.content);
+                        if (matchIdx !== -1) {
+                            counts[prevPeriod]++;
+                            prevLinesPool.splice(matchIdx, 1);
+                        } else {
+                            nextRemaining.push(line);
+                        }
+                    }
+                    remainingLines = nextRemaining;
+                }
+            }
+
+            // Finally, lines that never appeared in previous batches are attributed to current
+            counts[currentPeriod] += remainingLines.length;
+        }
+
+        // Add to results
         for (const [period, count] of Object.entries(counts)) {
-            results.push({ commit_date: date, period, line_count: count });
+            results.push({ 
+                commit_date: snapshotDateStr, 
+                period: period, 
+                line_count: count 
+            });
         }
     }
 
