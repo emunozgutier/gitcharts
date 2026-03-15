@@ -27,7 +27,6 @@ interface FolderNode {
 const GitSettings: React.FC<GitSettingsProps> = ({ extensions, folders, folderLines, timeRange, commitTimestamps, onAnalyze }) => {
   const [selectedExtensions, setSelectedExtensions] = useState<string[]>([]);
   const [selectedFolders, setSelectedFolders] = useState<string[]>([]);
-  const [pointerOffset, setPointerOffset] = useState(15);
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set(['.']));
   const [depth, setDepth] = useState<number>(50);
   
@@ -334,19 +333,7 @@ const GitSettings: React.FC<GitSettingsProps> = ({ extensions, folders, folderLi
               ))}
             </div>
           </div>
-          <div className="text-muted smallest mt-2 px-1 d-flex justify-content-between align-items-center">
-            <span>Selected range: <strong>{daysInRange.toFixed(0)} days</strong></span>
-            <div className="d-flex align-items-center gap-2">
-              <span className="smallest text-muted">Pointer Offset:</span>
-              <input 
-                type="number" 
-                className="form-control form-control-sm py-0 px-1 text-center" 
-                style={{ width: '45px', height: '20px', fontSize: '0.65rem' }}
-                value={pointerOffset}
-                onChange={e => setPointerOffset(parseInt(e.target.value) || 0)}
-              />
-            </div>
-          </div>
+          <div className="text-muted smallest mt-2 px-1">Selected range: <strong>{daysInRange.toFixed(0)} days</strong></div>
         </div>
 
         {/* Time Points */}
@@ -459,7 +446,7 @@ const GitSettings: React.FC<GitSettingsProps> = ({ extensions, folders, folderLi
           cursor: pointer;
           height: 14px;
           width: 16px;
-          margin-top: ${pointerOffset}px;
+          margin-top: 25px;
           pointer-events: all;
           position: relative;
           -webkit-appearance: none;
@@ -475,7 +462,7 @@ const GitSettings: React.FC<GitSettingsProps> = ({ extensions, folders, folderLi
           position: relative;
           border: none;
           clip-path: polygon(50% 0%, 0% 100%, 100% 100%);
-          transform: translateY(${pointerOffset - 2}px);
+          transform: translateY(23px);
         }
         .slider-track-bg {
           position: absolute;
