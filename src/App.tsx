@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import './App.css'
-import SearchBar from './components/SearchBar'
+import SearchBar from './components/TopMenuBar/SearchBar'
+import TopMenuBar from './components/TopMenuBar'
 import GitArchaeologyDisplay from './components/GitArchaeologyDisplay'
 import { useRepoStore } from './store/useRepoStore'
 
@@ -58,22 +59,10 @@ function App() {
         </header>
       ) : (
         <>
-          <nav className="navbar navbar-expand-lg navbar-dark bg-dark shadow-sm py-2">
-            <div className="container-fluid px-4 d-flex align-items-center justify-content-between">
-              <a className="navbar-brand fw-bold mb-0 d-flex align-items-center" href="#" onClick={() => handleRepoSelect(null)} style={{ cursor: 'pointer', textDecoration: 'none' }}>
-                <span className="me-2">🏛️</span>
-                <span>GitCharts <span className="text-primary">Archaeology</span></span>
-              </a>
-              <div className="flex-grow-1 mx-4" style={{ maxWidth: '800px' }}>
-                <SearchBar onSelect={handleRepoSelect} initialValue={selectedRepo} isMinimal />
-              </div>
-              <div className="text-light d-none d-md-block">
-                <span className="badge bg-secondary rounded-pill px-3 py-2 border border-secondary">
-                  {selectedRepo}
-                </span>
-              </div>
-            </div>
-          </nav>
+          <TopMenuBar 
+            selectedRepo={selectedRepo} 
+            onRepoSelect={handleRepoSelect} 
+          />
           
           <main className="main-content p-3 container-wide">
             <GitArchaeologyDisplay 
@@ -85,8 +74,6 @@ function App() {
 
       <style>{`
         .repo-selected { background-color: #f8f9fa; }
-        .navbar-brand { font-size: 1.1rem; color: #fff !important; }
-        .navbar-brand:hover { opacity: 0.8; }
       `}</style>
     </div>
   )
