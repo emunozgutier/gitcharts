@@ -40,7 +40,7 @@ export class GitArchaeology {
     this.dir = `/${repoFullName}`;
   }
 
-  async run(
+  private async GetFileLinesPerPeriod(
     onProgress?: (progress: string) => void,
     options?: { 
       extensions?: string[]; 
@@ -51,7 +51,7 @@ export class GitArchaeology {
       endDate?: string;
       granularity?: GranularityUnit;
     }
-  ): Promise<BlameDataPoint[]> {
+  ): Promise<{ data: Record<string, FileLinesPreserved[]>; timePoints: number[] }> {
     if (!options?.skipClone) {
         await cloneRepo({
           dir: this.dir,
@@ -157,6 +157,24 @@ export class GitArchaeology {
         previousCommitHash = commit.oid;
         previousDate = date0;
     }
+
+    return { data, timePoints };
+  }
+
+  async run(
+    onProgress?: (progress: string) => void,
+    options?: { 
+      extensions?: string[]; 
+      folders?: string[]; 
+      skipClone?: boolean;
+      depth?: number;
+      startDate?: string;
+      endDate?: string;
+      granularity?: GranularityUnit;
+    }
+  ): Promise<BlameDataPoint[]> {
+    const { data, timePoints } = await this.GetFileLinesPerPeriod(onProgress, options);
+
 
     // Convert data back to BlameDataPoint format with MANUAL MULTI-PASS attribution
     const results: BlameDataPoint[] = [];
