@@ -139,7 +139,7 @@ const GitSettings: React.FC<GitSettingsProps> = ({ extensions, folders, folderLi
   const maxPossiblePoints = Math.floor(daysInRange) + 1;
   const safeMaxPoints = Math.min(200, maxPossiblePoints);
   const effectiveDepth = Math.max(2, Math.min(depth, safeMaxPoints));
-  const distanceDays = (daysInRange / (effectiveDepth - 1)).toFixed(1);
+  const distanceDays = Math.round(daysInRange / (effectiveDepth - 1)).toString();
   
   const commitsInRange = useMemo(() => {
     return commitTimestamps.filter(ts => ts >= minVal && ts <= maxVal).length;
