@@ -133,10 +133,9 @@ export class GitArchaeology {
             files = files.filter(f => options.folders!.some(folder => f.startsWith(folder)));
         }
 
-        const sampledFiles = files.slice(0, 15);
         const currentFileList: FileLinesPreserved[] = [];
 
-        for (const filepath of sampledFiles) {
+        for (const filepath of files) {
             try {
                 const content = await withTimeout(
                     readFileAtCommit(this.dir, commit.oid, filepath),
