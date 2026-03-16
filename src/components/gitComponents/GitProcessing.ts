@@ -329,8 +329,8 @@ export class GitArchaeology {
     const allFiles = await listAllFiles(this.dir, latestOid);
     const files = allFiles.filter(isCodeFile);
 
-    const extensionsLines: Record<string, number> = {};
-    const foldersLines: Record<string, number> = {};
+    const extensionsCounts: Record<string, number> = {};
+    const foldersCounts: Record<string, number> = {};
 
     for (const file of files) {
       let folder = '.';
@@ -340,25 +340,16 @@ export class GitArchaeology {
       }
 
       const extMatch = file.match(/\.([^.]+)$/);
-      const ext = extMatch ? extMatch[0] : null;
+      const ext = extMatch ? extMatch[0] : 'no-ext';
 
-      try {
-        const content = await readFileAtCommit(this.dir, latestOid, file);
-        if (content) {
-          const lines = content.split('\n').length;
-          if (ext) {
-            extensionsLines[ext] = (extensionsLines[ext] || 0) + lines;
-          }
-          foldersLines[folder] = (foldersLines[folder] || 0) + lines;
-        }
-      } catch {
-      }
+      extensionsCounts[ext] = (extensionsCounts[ext] || 0) + 1;
+      foldersCounts[folder] = (foldersCounts[folder] || 0) + 1;
     }
 
     return {
-      extensions: extensionsLines,
-      folders: Object.keys(foldersLines).sort(),
-      folderLines: foldersLines,
+      extensions: extensionsCounts,
+      folders: Object.keys(foldersCounts).sort(),
+      folderLines: foldersCounts,
       timeRange: { min: minTime, max: maxTime },
       commitTimestamps: commitTimestamps,
     };

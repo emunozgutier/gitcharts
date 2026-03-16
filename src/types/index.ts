@@ -1,4 +1,4 @@
-export type AnalysisState = 'IDLE' | 'CLONING' | 'SETTINGS' | 'ANALYZING' | 'DONE';
+export type AnalysisState = 'IDLE' | 'CLONING' | 'SETTINGS' | 'ANALYZING' | 'DONE' | 'ERROR';
 
 export interface BlameDataPoint {
   commit_date: string;

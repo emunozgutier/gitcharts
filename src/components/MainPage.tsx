@@ -63,7 +63,7 @@ const MainPage: React.FC<MainPageProps> = ({
     } catch (err: any) {
       setProgress(`Error: ${err.message || "Failed to initialize"}`);
       console.error(err);
-      setState('IDLE');
+      setState('ERROR');
     }
   }, [repoFullName, setState, setProgress, setRepoInfo, setStats]);
 
@@ -132,6 +132,24 @@ const MainPage: React.FC<MainPageProps> = ({
             commitTimestamps={repoInfo.commitTimestamps}
             onAnalyze={handleStartAnalysis} 
           />
+        )}
+
+        {state === 'ERROR' && (
+          <div className="d-flex flex-column justify-content-center align-items-center h-100 text-center p-4">
+            <div className="alert alert-danger shadow-sm rounded-4 mb-4" style={{ maxWidth: '500px' }}>
+              <h4 className="alert-heading h5 fw-bold mb-3">Something went wrong</h4>
+              <p className="mb-0 small">{progress}</p>
+            </div>
+            <button 
+              className="btn btn-primary btn-lg rounded-pill px-5 shadow" 
+              onClick={() => {
+                setState('IDLE');
+                setProgress(null);
+              }}
+            >
+              Try Again
+            </button>
+          </div>
         )}
 
         <ProgressStateAndBar state={state} progress={progress} />

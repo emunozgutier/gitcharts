@@ -58,7 +58,9 @@ async function rmrf(path: string): Promise<void> {
 
   if (stat.isDirectory()) {
     const entries: string[] = await pfs.readdir(path);
-    await Promise.all(entries.map((e: string) => rmrf(`${path}/${e}`)));
+    for (const e of entries) {
+      await rmrf(`${path}/${e}`);
+    }
     await pfs.rmdir(path);
   } else {
     await pfs.unlink(path);
