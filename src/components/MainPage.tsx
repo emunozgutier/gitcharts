@@ -6,11 +6,13 @@ import Chart from './Chart';
 import Settings from './Settings';
 import { useRepoStore } from '../store/useRepoStore';
 
-interface GitArchaeologyDisplayProps {
+import ProgressStateAndBar from './ProgressStateAndBar';
+
+interface MainPageProps {
   repoFullName: string;
 }
 
-const GitArchaeologyDisplay: React.FC<GitArchaeologyDisplayProps> = ({ 
+const MainPage: React.FC<MainPageProps> = ({ 
   repoFullName, 
 }) => {
   const {
@@ -132,15 +134,7 @@ const GitArchaeologyDisplay: React.FC<GitArchaeologyDisplayProps> = ({
           />
         )}
 
-        {(state === 'ANALYZING' || state === 'CLONING') && (
-          <div className="position-absolute top-50 start-50 translate-middle text-center w-75">
-            <div className="spinner-grow text-primary mb-3" role="status"></div>
-            <div className="h4 fw-bold mb-2">{progress}</div>
-            <div className="progress" style={{ height: '4px' }}>
-              <div className="progress-bar progress-bar-striped progress-bar-animated" style={{ width: '100%' }}></div>
-            </div>
-          </div>
-        )}
+        <ProgressStateAndBar state={state} progress={progress} />
 
         {state === 'DONE' && data.length > 0 && <Chart data={data} />}
         
@@ -166,4 +160,4 @@ const GitArchaeologyDisplay: React.FC<GitArchaeologyDisplayProps> = ({
   );
 };
 
-export default GitArchaeologyDisplay;
+export default MainPage;

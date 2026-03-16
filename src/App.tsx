@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import './App.css'
 import SearchBar from './components/TopMenuBar/SearchBar'
 import TopMenuBar from './components/TopMenuBar'
-import GitArchaeologyDisplay from './components/GitArchaeologyDisplay'
+import MainPage from './components/MainPage'
 import { useRepoStore } from './store/useRepoStore'
 
 function App() {
@@ -65,7 +65,7 @@ function App() {
           />
           
           <main className="main-content p-3 container-wide">
-            <GitArchaeologyDisplay 
+            <MainPage 
               repoFullName={selectedRepo} 
             />
           </main>
