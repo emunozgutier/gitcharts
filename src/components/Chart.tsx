@@ -2,11 +2,11 @@ import React, { useEffect, useRef } from 'react';
 import embed from 'vega-embed';
 import { type BlameDataPoint } from './gitComponents/GitProcessing';
 
-interface GitChartProps {
+interface ChartProps {
   data: BlameDataPoint[];
 }
 
-const GitChart: React.FC<GitChartProps> = ({ data }) => {
+const Chart: React.FC<ChartProps> = ({ data }) => {
   const chartRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -73,4 +73,4 @@ const GitChart: React.FC<GitChartProps> = ({ data }) => {
   );
 };
 
-export default GitChart;
+export default Chart;

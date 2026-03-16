@@ -2,8 +2,8 @@ import React, { useEffect, useCallback } from 'react';
 import { GitArchaeology } from './gitComponents/GitProcessing';
 import { type GranularityUnit } from './gitComponents/GitProcessing';
 import { cloneRepo } from './gitComponents/GitDownload';
-import GitChart from './GitChart';
-import GitSettings from './GitSettings';
+import Chart from './Chart';
+import Settings from './Settings';
 import { useRepoStore } from '../store/useRepoStore';
 
 interface GitArchaeologyDisplayProps {
@@ -122,7 +122,7 @@ const GitArchaeologyDisplay: React.FC<GitArchaeologyDisplayProps> = ({
     <div className="d-flex flex-column h-100 w-100">
       <div className="flex-grow-1 position-relative overflow-hidden">
         {state === 'SETTINGS' && repoInfo && (
-          <GitSettings 
+          <Settings 
             extensions={repoInfo.extensions} 
             folders={repoInfo.folders} 
             folderLines={repoInfo.folderLines}
@@ -142,7 +142,7 @@ const GitArchaeologyDisplay: React.FC<GitArchaeologyDisplayProps> = ({
           </div>
         )}
 
-        {state === 'DONE' && data.length > 0 && <GitChart data={data} />}
+        {state === 'DONE' && data.length > 0 && <Chart data={data} />}
         
         {state === 'DONE' && data.length === 0 && !progress && (
           <div className="text-center mt-5 text-muted">

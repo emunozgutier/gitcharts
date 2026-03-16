@@ -3,7 +3,7 @@ import { type GranularityUnit } from './gitComponents/GitProcessing';
 import TimeFrameAndPoints from './Settings/TimeFrameAndPoints';
 import FileTypesAndFolderStructure, { type FolderNode } from './Settings/FileTypesAndFolderStructure';
 
-interface GitSettingsProps {
+interface SettingsProps {
   extensions: Record<string, number>;
   folders: string[];
   folderLines: Record<string, number>;
@@ -19,7 +19,7 @@ interface GitSettingsProps {
   commitTimestamps: number[];
 }
 
-const GitSettings: React.FC<GitSettingsProps> = ({ extensions, folders, folderLines, timeRange, commitTimestamps, onAnalyze }) => {
+const Settings: React.FC<SettingsProps> = ({ extensions, folders, folderLines, timeRange, commitTimestamps, onAnalyze }) => {
   const [selectedExtensions, setSelectedExtensions] = useState<string[]>([]);
   const [selectedFolders, setSelectedFolders] = useState<string[]>([]);
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set(['.']));
@@ -157,7 +157,7 @@ const GitSettings: React.FC<GitSettingsProps> = ({ extensions, folders, folderLi
   };
 
   return (
-    <div className="git-settings card shadow-sm p-4 h-100 overflow-auto border-0">
+    <div className="settings card shadow-sm p-4 h-100 overflow-auto border-0">
       <h3 className="h5 mb-4 fw-bold d-flex align-items-center">
         <span className="me-2">⚙️</span> Analysis Settings
       </h3>
@@ -284,4 +284,4 @@ const GitSettings: React.FC<GitSettingsProps> = ({ extensions, folders, folderLi
   );
 };
 
-export default GitSettings;
+export default Settings;
