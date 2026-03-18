@@ -13,9 +13,11 @@
   },
   "dependencies": {
     "@isomorphic-git/lightning-fs": "^4.6.2",
+    "@types/lodash": "^4.17.24",
     "buffer": "^6.0.3",
     "gh-pages": "^6.3.0",
     "isomorphic-git": "^1.25.10",
+    "lodash": "^4.17.23",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "vega": "^6.2.0",

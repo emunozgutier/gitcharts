@@ -11,6 +11,8 @@ import {
   withTimeout,
 } from './GitDownload';
 
+import _ from 'lodash';
+
 
 // ── Public types ──────────────────────────────────────────────────────────────
 
@@ -217,22 +219,22 @@ export class GitArchaeology {
   }
 
   private GetLinesThatSurvived(fileBefore: FileLinesPreserved, fileAfter: FileLinesPreserved): [number, FileLinesPreserved] {
-    const survivingLines: LineHistory[] = [];
+    const poolGroups = _.groupBy(fileBefore.filelines, 'content');
     const notFoundLines: LineHistory[] = [];
-    const pool = [...fileBefore.filelines];
+    let survivingCount = 0;
 
     for (const line of fileAfter.filelines) {
-      const idx = pool.findIndex(pl => pl.content === line.content);
-      if (idx !== -1) {
-        survivingLines.push(pool[idx]);
-        pool.splice(idx, 1);
+      const group = poolGroups[line.content];
+      if (group && group.length > 0) {
+        survivingCount++;
+        group.shift();
       } else {
         notFoundLines.push(line);
       }
     }
 
     return [
-      survivingLines.length,
+      survivingCount,
       {
         filename: fileAfter.filename,
         filelines: notFoundLines
