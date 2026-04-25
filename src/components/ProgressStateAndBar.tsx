@@ -6,7 +6,7 @@ interface ProgressStateAndBarProps {
 }
 
 const ProgressStateAndBar: React.FC<ProgressStateAndBarProps> = ({ state, progress }) => {
-  if (state !== 'ANALYZING' && state !== 'CLONING') {
+  if (state !== 'processing repo' && state !== 'Downloading repo' && state !== 'searching for repo name') {
     return null;
   }
 

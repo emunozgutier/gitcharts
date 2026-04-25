@@ -3,14 +3,14 @@ import './App.css'
 import SearchBar from './components/TopMenuBar/SearchBar'
 import TopMenuBar from './components/TopMenuBar'
 import MainPage from './components/MainPage'
-import { useRepoStore } from './store/useRepoStore'
+import { useStore } from './store/useStore'
 
 function App() {
   const { 
     selectedRepo, 
     setSelectedRepo, 
     resetAnalysis 
-  } = useRepoStore();
+  } = useStore();
 
   // Sync selectedRepo with URL hash
   useEffect(() => {

@@ -4,7 +4,7 @@ import { type GranularityUnit } from './gitComponents/GitProcessing';
 import { cloneRepo } from './gitComponents/GitDownload';
 import Chart from './Chart';
 import Settings from './Settings';
-import { useRepoStore } from '../store/useRepoStore';
+import { useStore } from '../store/useStore';
 
 import ProgressStateAndBar from './ProgressStateAndBar';
 
@@ -28,10 +28,10 @@ const MainPage: React.FC<MainPageProps> = ({
     setStats,
     repoCache,
     updateCache
-  } = useRepoStore();
+  } = useStore();
 
   const startInitialClone = useCallback(async () => {
-    setState('CLONING');
+    setState('searching for repo name');
     setProgress("Connecting to GitHub API...");
     
     try {
@@ -48,6 +48,7 @@ const MainPage: React.FC<MainPageProps> = ({
 
       const archaeology = new GitArchaeology(repoFullName);
       // step 1: download only
+      setState('Downloading repo');
       await cloneRepo({
         dir: archaeology.dir,
         repoUrl: archaeology.repoUrl,
@@ -58,12 +59,12 @@ const MainPage: React.FC<MainPageProps> = ({
       setProgress("Scanning repository structure...");
       const info = await archaeology.scanRepo();
       setRepoInfo(info);
-      setState('SETTINGS');
+      setState('selected repo name');
       setProgress(null);
     } catch (err: any) {
       setProgress(`Error: ${err.message || "Failed to initialize"}`);
       console.error(err);
-      setState('ERROR');
+      setState('FAILURE during download');
     }
   }, [repoFullName, setState, setProgress, setRepoInfo, setStats]);
 
@@ -72,11 +73,11 @@ const MainPage: React.FC<MainPageProps> = ({
     if (cached) {
       setData(cached.data);
       setStats(cached.stats);
-      setState('DONE');
+      setState('done');
       return;
     }
 
-    if (state === 'IDLE') {
+    if (state === 'init') {
       startInitialClone();
     }
   }, [repoFullName, repoCache, state, startInitialClone, setData, setStats, setState]);
@@ -89,7 +90,7 @@ const MainPage: React.FC<MainPageProps> = ({
     endDate: string;
     granularity: GranularityUnit;
   }) => {
-    setState('ANALYZING');
+    setState('processing repo');
     setProgress("Analyzing commit history...");
     
     try {
@@ -112,18 +113,19 @@ const MainPage: React.FC<MainPageProps> = ({
       if (stats) {
         updateCache(repoFullName, { stats, data: results });
       }
-      setState('DONE');
+      setState('done');
       setProgress(null);
     } catch (err: any) {
       setProgress(`Error: ${err.message || "Failed to analyze"}`);
       console.error(err);
+      setState('failure during processing repo');
     }
   };
 
   return (
     <div className="d-flex flex-column h-100 w-100">
       <div className="flex-grow-1 position-relative overflow-hidden">
-        {state === 'SETTINGS' && repoInfo && (
+        {state === 'selected repo name' && repoInfo && (
           <Settings 
             extensions={repoInfo.extensions} 
             folders={repoInfo.folders} 
@@ -134,7 +136,7 @@ const MainPage: React.FC<MainPageProps> = ({
           />
         )}
 
-        {state === 'ERROR' && (
+        {(state === 'FAILURE during download' || state === 'failure during processing repo') && (
           <div className="d-flex flex-column justify-content-center align-items-center h-100 text-center p-4">
             <div className="alert alert-danger shadow-sm rounded-4 mb-4" style={{ maxWidth: '500px' }}>
               <h4 className="alert-heading h5 fw-bold mb-3">Something went wrong</h4>
@@ -143,7 +145,7 @@ const MainPage: React.FC<MainPageProps> = ({
             <button 
               className="btn btn-primary btn-lg rounded-pill px-5 shadow" 
               onClick={() => {
-                setState('IDLE');
+                setState('init');
                 setProgress(null);
               }}
             >
@@ -154,21 +156,21 @@ const MainPage: React.FC<MainPageProps> = ({
 
         <ProgressStateAndBar state={state} progress={progress} />
 
-        {state === 'DONE' && data.length > 0 && <Chart data={data} />}
+        {state === 'done' && data.length > 0 && <Chart data={data} />}
         
-        {state === 'DONE' && data.length === 0 && !progress && (
+        {state === 'done' && data.length === 0 && !progress && (
           <div className="text-center mt-5 text-muted">
              <p>No data found for selected filters.</p>
-             <button className="btn btn-sm btn-outline-primary rounded-pill" onClick={() => setState('SETTINGS')}>Adjust Settings</button>
+             <button className="btn btn-sm btn-outline-primary rounded-pill" onClick={() => setState('selected repo name')}>Adjust Settings</button>
           </div>
         )}
       </div>
       
       <div className="d-flex justify-content-between align-items-center mt-3 px-1 text-muted small">
-        <span>{state === 'DONE' ? 'Showing code age distribution. Older layers at the bottom.' : 'Waiting for analysis...'}</span>
-        {state === 'DONE' && (
+        <span>{state === 'done' ? 'Showing code age distribution. Older layers at the bottom.' : 'Waiting for analysis...'}</span>
+        {state === 'done' && (
           <div className="d-flex gap-2">
-            <button className="btn btn-link btn-sm text-decoration-none p-0" onClick={() => setState('SETTINGS')}>Settings</button>
+            <button className="btn btn-link btn-sm text-decoration-none p-0" onClick={() => setState('selected repo name')}>Settings</button>
             <span>•</span>
             <button className="btn btn-link btn-sm text-decoration-none p-0" onClick={() => startInitialClone()}>Reset</button>
           </div>

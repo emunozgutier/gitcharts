@@ -1,10 +1,36 @@
 import { create } from 'zustand';
-import type { AnalysisState, BlameDataPoint, RepoStats, RepoInfo, AnalysisResult } from '../types';
+
+export type GlobalState = 'init' | 'searching for repo name' | 'selected repo name' | 'Downloading repo' | 'FAILURE during download' | 'processing repo' | 'failure during processing repo' | 'done';
+
+export interface BlameDataPoint {
+  commit_date: string;
+  period: string;
+  line_count: number;
+}
+
+export interface RepoStats {
+  size: number;
+  language: string;
+  forks: number;
+}
+
+export interface RepoInfo {
+  extensions: Record<string, number>;
+  folders: string[];
+  folderLines: Record<string, number>;
+  timeRange: { min: number; max: number };
+  commitTimestamps: number[];
+}
+
+export interface AnalysisResult {
+  stats: RepoStats;
+  data: BlameDataPoint[];
+}
 
 interface RepoStore {
   selectedRepo: string | null;
   repoCache: Record<string, AnalysisResult>;
-  analysisState: AnalysisState;
+  analysisState: GlobalState;
   progress: string | null;
   data: BlameDataPoint[];
   repoInfo: RepoInfo | null;
@@ -12,7 +38,7 @@ interface RepoStore {
 
   // Actions
   setSelectedRepo: (repo: string | null) => void;
-  setAnalysisState: (state: AnalysisState) => void;
+  setAnalysisState: (state: GlobalState) => void;
   setProgress: (progress: string | null) => void;
   setData: (data: BlameDataPoint[]) => void;
   setRepoInfo: (info: RepoInfo | null) => void;
@@ -21,13 +47,13 @@ interface RepoStore {
   resetAnalysis: () => void;
 }
 
-export const useRepoStore = create<RepoStore>((set) => ({
+export const useStore = create<RepoStore>((set) => ({
   selectedRepo: (() => {
     const hash = window.location.hash.substring(1);
     return hash || null;
   })(),
   repoCache: {},
-  analysisState: 'IDLE',
+  analysisState: 'init',
   progress: null,
   data: [],
   repoInfo: null,
@@ -43,7 +69,7 @@ export const useRepoStore = create<RepoStore>((set) => ({
     repoCache: { ...state.repoCache, [repo]: result }
   })),
   resetAnalysis: () => set({
-    analysisState: 'IDLE',
+    analysisState: 'init',
     progress: null,
     data: [],
     repoInfo: null,
