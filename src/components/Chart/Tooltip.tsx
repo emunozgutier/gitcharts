@@ -4,7 +4,7 @@ interface TooltipProps {
   x: number;
   y: number;
   date: string;
-  periods: { period: string; count: number; added: number }[];
+  periods: { period: string; count: number; added: number; color: string }[];
 }
 
 const Tooltip: React.FC<TooltipProps> = ({ x, y, date, periods }) => {
@@ -43,8 +43,18 @@ const Tooltip: React.FC<TooltipProps> = ({ x, y, date, periods }) => {
       </div>
       <div className="d-flex flex-column gap-1 mb-2">
         {periods.map(p => (
-          <div key={p.period} className="d-flex small">
-            <span style={{ width: '35%' }}>{p.period}</span>
+          <div key={p.period} className="d-flex small align-items-center">
+            <span style={{ width: '35%', display: 'flex', alignItems: 'center' }}>
+              <span style={{ 
+                display: 'inline-block', 
+                width: '10px', 
+                height: '10px', 
+                backgroundColor: p.color, 
+                marginRight: '6px',
+                borderRadius: '2px'
+              }}></span>
+              {p.period}
+            </span>
             <span className="fw-semibold" style={{ width: '35%', textAlign: 'right' }}>
               {p.count.toLocaleString()}
             </span>

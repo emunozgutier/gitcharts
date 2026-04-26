@@ -13,7 +13,7 @@ const Chart: React.FC<ChartProps> = ({ data }) => {
   const [selectedDateData, setSelectedDateData] = useState<{ commitDate: string; filesData: Record<string, number> } | null>(null);
   
   // Custom tooltip state
-  const [tooltipInfo, setTooltipInfo] = useState<{ date: string; periods: {period: string, count: number, added: number}[] } | null>(null);
+  const [tooltipInfo, setTooltipInfo] = useState<{ date: string; periods: {period: string, count: number, added: number, color: string}[] } | null>(null);
   const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
 
   useEffect(() => {
@@ -129,6 +129,8 @@ const Chart: React.FC<ChartProps> = ({ data }) => {
 
              if (matchedData.length > 0) {
                const dateStr = matchedData[0].commit_date;
+               const colorScale = result.view.scale('color');
+
                const periods = matchedData
                   .map(d => {
                      const prevCount = prevData.find(pd => pd.period === d.period)?.line_count || 0;
@@ -137,7 +139,8 @@ const Chart: React.FC<ChartProps> = ({ data }) => {
                      return { 
                        period: d.period, 
                        count: currentCount,
-                       added: added
+                       added: added,
+                       color: colorScale(d.period)
                      };
                   })
                   .filter(p => {
@@ -145,7 +148,7 @@ const Chart: React.FC<ChartProps> = ({ data }) => {
                     const isZeroAdded = Math.abs(p.added) < 0.001;
                     return !(isZeroCount && isZeroAdded);
                   })
-                  .sort((a,b) => new Date(a.period).getTime() - new Date(b.period).getTime()); // early to late
+                  .sort((a,b) => new Date(b.period).getTime() - new Date(a.period).getTime()); // newer at top, older at bottom
                   
                setTooltipInfo({ date: dateStr, periods });
              } else {
