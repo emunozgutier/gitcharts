@@ -37,25 +37,26 @@ const Tooltip: React.FC<TooltipProps> = ({ x, y, date, periods }) => {
         {new Date(date).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })}
       </div>
       <div className="d-flex text-muted small mb-1 fw-bold">
-        <span style={{ width: '35%' }}>Period</span>
-        <span style={{ width: '35%', textAlign: 'right' }}>Lines</span>
+        <span style={{ width: '40%' }}>Period</span>
+        <span style={{ width: '30%', textAlign: 'right' }}>Lines</span>
         <span style={{ width: '30%', textAlign: 'right' }}>Added</span>
       </div>
       <div className="d-flex flex-column gap-1 mb-2">
         {periods.map(p => (
           <div key={p.period} className="d-flex small align-items-center">
-            <span style={{ width: '35%', display: 'flex', alignItems: 'center' }}>
-              <span style={{ 
-                display: 'inline-block', 
-                width: '10px', 
-                height: '10px', 
-                backgroundColor: p.color, 
-                marginRight: '6px',
-                borderRadius: '2px'
-              }}></span>
+            <span style={{ 
+              width: '40%', 
+              backgroundColor: p.color,
+              color: '#fff',
+              padding: '1px 4px',
+              borderRadius: '4px',
+              textShadow: '0 1px 2px rgba(0,0,0,0.5)',
+              textAlign: 'center',
+              whiteSpace: 'nowrap'
+            }}>
               {p.period}
             </span>
-            <span className="fw-semibold" style={{ width: '35%', textAlign: 'right' }}>
+            <span className="fw-semibold" style={{ width: '30%', textAlign: 'right' }}>
               {p.count.toLocaleString()}
             </span>
             <span style={{ width: '30%', textAlign: 'right' }}>
@@ -71,8 +72,8 @@ const Tooltip: React.FC<TooltipProps> = ({ x, y, date, periods }) => {
         ))}
       </div>
       <div className="d-flex border-top pt-2 small fw-bold">
-        <span style={{ width: '35%' }}>Total</span>
-        <span style={{ width: '35%', textAlign: 'right' }}>{totalLines.toLocaleString()}</span>
+        <span style={{ width: '40%' }}>Total</span>
+        <span style={{ width: '30%', textAlign: 'right' }}>{totalLines.toLocaleString()}</span>
         <span style={{ width: '30%', textAlign: 'right' }}>
            {totalAdded > 0 ? (
               <span className="text-success"><i className="bi bi-arrow-up-short"></i>{totalAdded.toLocaleString()}</span>
