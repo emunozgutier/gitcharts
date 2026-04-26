@@ -95,7 +95,8 @@ export class GitArchaeology {
 
   constructor(repoFullName: string) {
     this.repoUrl = `https://github.com/${repoFullName}`;
-    this.dir = `/${repoFullName}`;
+    const uniqueSuffix = Math.random().toString(36).substring(2, 8);
+    this.dir = `/${repoFullName}-${uniqueSuffix}`;
   }
 
   private async GetFileLinesPerPeriod(

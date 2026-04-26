@@ -61,9 +61,33 @@ async function rmrf(path: string): Promise<void> {
     for (const e of entries) {
       await rmrf(`${path}/${e}`);
     }
-    await pfs.rmdir(path);
+    try {
+      await pfs.rmdir(path);
+    } catch (e) {
+      // Ignore errors like ENOTEMPTY, we'll use unique dirs to avoid collisions
+    }
   } else {
-    await pfs.unlink(path);
+    try {
+      await pfs.unlink(path);
+    } catch (e) {
+      // Ignore
+    }
+  }
+}
+
+/**
+ * Wipes the root directory to clear out any old repositories and free up IndexedDB space.
+ */
+export async function wipeAllFs(): Promise<void> {
+  try {
+    const entries = await pfs.readdir('/');
+    for (const e of entries) {
+      if (e !== '.' && e !== '..') {
+        await rmrf(`/${e}`);
+      }
+    }
+  } catch (e) {
+    console.warn("Failed to wipe fs:", e);
   }
 }
 
@@ -76,8 +100,8 @@ export async function cloneRepo(opts: CloneOptions): Promise<void> {
 
   // Always wipe the previous clone so we never reuse stale git objects
   // that were fetched before code fixes.
-  if (onProgress) onProgress('Clearing previous clone...');
-  await rmrf(dir);
+  if (onProgress) onProgress('Clearing previous clones...');
+  await wipeAllFs();
   
   // Recursively create directories
   const parts = dir.split('/').filter(Boolean);
