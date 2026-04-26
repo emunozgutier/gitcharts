@@ -146,9 +146,7 @@ export class GitArchaeology {
     const timePoints: number[] = [];
     if (requestedPoints > 1) {
       const step = (endTs - startTs) / (requestedPoints - 1);
-      for (let i = 0; i < requestedPoints; i++) {
-        timePoints.push(startTs + i * step);
-      }
+      timePoints.push(..._.times(requestedPoints, i => startTs + i * step));
     } else {
       timePoints.push(endTs);
     }
@@ -203,29 +201,39 @@ export class GitArchaeology {
 
         const currentFileList: FileLinesPreserved[] = [];
         const totalFiles = files.length;
+        const fileChunks = _.chunk(files, 50);
+        let processedFiles = 0;
 
-        for (let fIdx = 0; fIdx < totalFiles; fIdx++) {
-            const filepath = files[fIdx];
-            if (onProgress && (fIdx % 5 === 0 || fIdx === totalFiles - 1)) {
-                onProgress(`Processing SNAPSHOT ${date0} (${i + 1}/${timePoints.length}) - Files: ${fIdx + 1}/${totalFiles}...`);
+        for (const chunk of fileChunks) {
+            const chunkResults = await Promise.all(
+                chunk.map(async (filepath) => {
+                    try {
+                        const content = await withTimeout(
+                            readFileAtCommit(this.dir, commit.oid, filepath),
+                            15_000,
+                            `Reading ${filepath}`
+                        );
+                        if (content !== null) {
+                            const lines = content.split('\n')
+                                .filter(line => line.trim().length > 0)
+                                .map(line => ({ content: line, period: period0 }));
+
+                            return {
+                                filename: filepath,
+                                filelines: lines
+                            };
+                        }
+                    } catch {}
+                    return null;
+                })
+            );
+            
+            currentFileList.push(...chunkResults.filter((r): r is FileLinesPreserved => r !== null));
+            processedFiles += chunk.length;
+
+            if (onProgress) {
+                onProgress(`Processing SNAPSHOT ${date0} (${i + 1}/${timePoints.length}) - Files: ${processedFiles}/${totalFiles}...`);
             }
-            try {
-                const content = await withTimeout(
-                    readFileAtCommit(this.dir, commit.oid, filepath),
-                    15_000,
-                    `Reading ${filepath}`
-                );
-                if (content !== null) {
-                    const lines = content.split('\n')
-                        .filter(line => line.trim().length > 0)
-                        .map(line => ({ content: line, period: period0 }));
-
-                    currentFileList.push({
-                        filename: filepath,
-                        filelines: lines
-                    });
-                }
-            } catch {}
             
             // Yield partial data during long file loops
             const loopNow = Date.now();
@@ -385,22 +393,15 @@ export class GitArchaeology {
     const allFiles = await listAllFiles(this.dir, latestOid);
     const files = allFiles.filter(isCodeFile);
 
-    const extensionsCounts: Record<string, number> = {};
-    const foldersCounts: Record<string, number> = {};
-
-    for (const file of files) {
-      let folder = '.';
-      const parts = file.split('/');
-      if (parts.length > 1) {
-        folder = parts.slice(0, -1).join('/');
-      }
-
+    const extensionsCounts = _.countBy(files, file => {
       const extMatch = file.match(/\.([^.]+)$/);
-      const ext = extMatch ? extMatch[0] : 'no-ext';
+      return extMatch ? extMatch[0] : 'no-ext';
+    });
 
-      extensionsCounts[ext] = (extensionsCounts[ext] || 0) + 1;
-      foldersCounts[folder] = (foldersCounts[folder] || 0) + 1;
-    }
+    const foldersCounts = _.countBy(files, file => {
+      const parts = file.split('/');
+      return parts.length > 1 ? parts.slice(0, -1).join('/') : '.';
+    });
 
     return {
       extensions: extensionsCounts,
