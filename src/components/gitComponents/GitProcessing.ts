@@ -229,7 +229,7 @@ export class GitArchaeology {
             
             // Yield partial data during long file loops
             const loopNow = Date.now();
-            if (options?.onPartialSnapshotData && (loopNow - lastPartialUpdateTs > 3000)) {
+            if (options?.onPartialSnapshotData && (loopNow - lastPartialUpdateTs > 5000)) {
                 lastPartialUpdateTs = loopNow;
                 data[date0] = currentFileList;
                 options.onPartialSnapshotData({ data }, timePoints);
@@ -242,9 +242,9 @@ export class GitArchaeology {
         previousCommitHash = commit.oid;
         previousDate = date0;
         
-        const endNow = Date.now();
-        if (options?.onPartialSnapshotData && (endNow - lastPartialUpdateTs > 3000)) {
-            lastPartialUpdateTs = endNow;
+        // Always update the chart when a snapshot finishes, and reset the 5-second timer
+        if (options?.onPartialSnapshotData) {
+            lastPartialUpdateTs = Date.now();
             options.onPartialSnapshotData({ data }, timePoints);
             await new Promise(r => setTimeout(r, 0));
         }
@@ -280,61 +280,58 @@ export class GitArchaeology {
     snapshotData: { data: Record<string, FileLinesPreserved[]> }
   ): BlameDataPoint[] {
     const { data } = snapshotData;
-    const results: BlameDataPoint[] = [];
     const dateKeys = Object.keys(data).sort();
     
-    // For each snapshot J, we find where its lines came from by checking 0 to J-1
-    for (let j = 0; j < dateKeys.length; j++) {
-        const currentDate = dateKeys[j];
+    // Filter out dates with no snapshot data and flatMap to generate all data points
+    const results = _.flatMap(_.filter(dateKeys, date => !!data[date]), currentDate => {
+        const originalIndex = dateKeys.indexOf(currentDate);
         const currentFileList = data[currentDate];
-
-        if (!currentFileList) continue;
-
-        const counts: Record<string, number> = {};
-        const fileBreakdown: Record<string, Record<string, number>> = {};
+        const previousDates = dateKeys.slice(0, originalIndex + 1);
         
-        // Initialize counts for all dates (periods) seen up to now to 0
-        for (let k = 0; k <= j; k++) {
-            counts[dateKeys[k]] = 0;
-            fileBreakdown[dateKeys[k]] = {};
-        }
+        // Initialize counts and fileBreakdown using lodash mapping
+        const counts = _.fromPairs(_.map(previousDates, date => [date, 0]));
+        const fileBreakdown: Record<string, Record<string, number>> = _.fromPairs(_.map(previousDates, date => [date, {}]));
 
-        for (const currentFile of currentFileList) {
-            let fileToProcess = { ...currentFile, filelines: [...currentFile.filelines] };
+        // Process only files that have lines
+        const validFiles = _.filter(currentFileList, file => file.filelines.length > 0);
+        
+        _.forEach(validFiles, currentFile => {
+            const initialFileToProcess = { ...currentFile, filelines: [...currentFile.filelines] };
+            const previousDatesToCheck = dateKeys.slice(0, originalIndex);
 
-            // Check against ALL previous snapshots in order
-            for (let i = 0; i < j; i++) {
-                const prevDate = dateKeys[i];
+            // Functionally reduce the file's lines against all previous snapshots
+            const finalFileToProcess = _.reduce(previousDatesToCheck, (fileState, prevDate) => {
+                if (fileState.filelines.length === 0) return fileState;
+
                 const prevFileList = data[prevDate];
-                const prevFile = prevFileList.find(f => f.filename === currentFile.filename);
+                const prevFile = _.find(prevFileList, f => f.filename === fileState.filename);
 
-                if (prevFile && fileToProcess.filelines.length > 0) {
-                    const [countUpdate, remainingFile] = this.GetLinesThatSurvived(prevFile, fileToProcess);
+                if (prevFile) {
+                    const [countUpdate, remainingFile] = this.GetLinesThatSurvived(prevFile, fileState);
                     counts[prevDate] += countUpdate;
                     if (countUpdate > 0) {
-                        fileBreakdown[prevDate][currentFile.filename] = countUpdate;
+                        fileBreakdown[prevDate][fileState.filename] = countUpdate;
                     }
-                    fileToProcess = remainingFile;
+                    return remainingFile;
                 }
-            }
+                return fileState;
+            }, initialFileToProcess);
 
-            // Finally, any lines that never appeared in any previous batch
-            // are attributed to the current batch
-            counts[currentDate] += fileToProcess.filelines.length;
-            if (fileToProcess.filelines.length > 0) {
-                fileBreakdown[currentDate][currentFile.filename] = fileToProcess.filelines.length;
+            // Any remaining lines are attributed to the current batch
+            counts[currentDate] += finalFileToProcess.filelines.length;
+            if (finalFileToProcess.filelines.length > 0) {
+                fileBreakdown[currentDate][currentFile.filename] = finalFileToProcess.filelines.length;
             }
-        }
+        });
 
-        for (const [period, count] of Object.entries(counts)) {
-            results.push({ 
-                commit_date: currentDate, 
-                period, 
-                line_count: count,
-                files: fileBreakdown[period] 
-            });
-        }
-    }
+        // Transform the counts dictionary into an array of BlameDataPoints
+        return _.map(counts, (count, period) => ({
+            commit_date: currentDate,
+            period,
+            line_count: count,
+            files: fileBreakdown[period]
+        }));
+    });
 
     return results.sort((a, b) => a.commit_date.localeCompare(b.commit_date));
   }
