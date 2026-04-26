@@ -7,7 +7,9 @@ import {
   cloneRepo,
   readCommitLog,
   listAllFiles,
-  readFileAtCommit,
+  getBlobOidAtCommit,
+  readBlobContent,
+  clearTreeCache,
   withTimeout,
 } from './GitDownload';
 
@@ -25,14 +27,9 @@ export interface BlameDataPoint {
   files?: Record<string, number>; // filename -> line_count
 }
 
-export interface LineHistory {
-  content: string;
-  period: string; // The period this line was first introduced
-}
-
 export interface FileLinesPreserved {
   filename: string;
-  filelines: LineHistory[];
+  filelines: string[];
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -124,6 +121,9 @@ export class GitArchaeology {
     const requestedPoints = options?.depth || 50;
     const fetchDepth = Math.max(2000, requestedPoints * 2); 
     
+    // Clear the tree cache at the start of a run to prevent memory leaks
+    clearTreeCache();
+    
     if (onProgress) onProgress('Reading commit history...');
     let commits = await readCommitLog(this.dir, fetchDepth);
 
@@ -160,7 +160,6 @@ export class GitArchaeology {
     for (let i = 0; i < timePoints.length; i++) {
         const snapshotTs = timePoints[i];
         const date0 = toDateStr(snapshotTs);
-        const period0 = getPeriod(new Date(snapshotTs * 1000), options?.granularity);
 
         // Find the latest commit at or before this snapshot time
         const commit = commits.find(c => c.timestamp <= snapshotTs);
@@ -203,20 +202,33 @@ export class GitArchaeology {
         const totalFiles = files.length;
         const fileChunks = _.chunk(files, 50);
         let processedFiles = 0;
+        
+        const blobParsedCache = new Map<string, string[]>();
 
         for (const chunk of fileChunks) {
             const chunkResults = await Promise.all(
                 chunk.map(async (filepath) => {
                     try {
+                        const blobOid = await getBlobOidAtCommit(this.dir, commit.oid, filepath);
+                        if (!blobOid) return null;
+                        
+                        if (blobParsedCache.has(blobOid)) {
+                            return {
+                                filename: filepath,
+                                filelines: blobParsedCache.get(blobOid)!
+                            };
+                        }
+
                         const content = await withTimeout(
-                            readFileAtCommit(this.dir, commit.oid, filepath),
+                            readBlobContent(this.dir, blobOid),
                             15_000,
                             `Reading ${filepath}`
                         );
                         if (content !== null) {
                             const lines = content.split('\n')
-                                .filter(line => line.trim().length > 0)
-                                .map(line => ({ content: line, period: period0 }));
+                                .filter(line => line.trim().length > 0);
+                            
+                            blobParsedCache.set(blobOid, lines);
 
                             return {
                                 filename: filepath,
@@ -264,12 +276,12 @@ export class GitArchaeology {
   private GetLinesThatSurvived(fileBefore: FileLinesPreserved, fileAfter: FileLinesPreserved): [number, FileLinesPreserved] {
     // Optimization: Use _.countBy instead of _.groupBy to avoid array allocations
     // and expensive O(N) .shift() operations on large arrays of identical lines.
-    const poolCounts = _.countBy(fileBefore.filelines, 'content');
+    const poolCounts = _.countBy(fileBefore.filelines);
     let survivingCount = 0;
     const notFoundLines = fileAfter.filelines.filter(line => {
-      if (poolCounts[line.content] > 0) {
+      if (poolCounts[line] > 0) {
         survivingCount++;
-        poolCounts[line.content]--;
+        poolCounts[line]--;
         return false;
       }
       return true;

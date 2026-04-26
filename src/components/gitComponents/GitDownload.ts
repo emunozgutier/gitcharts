@@ -167,38 +167,42 @@ export async function listAllFiles(dir: string, oid: string): Promise<string[]> 
 
 // ── Blob reading ──────────────────────────────────────────────────────────────
 
+const treeCache = new Map<string, any[]>();
+
+export function clearTreeCache() {
+  treeCache.clear();
+}
+
 /**
- * Reads the raw text content of `filepath` at commit `oid`.
- * Returns `null` if the file is not found in the commit tree.
- *
- * NOTE: We resolve the blob by walking the tree segment-by-segment.
- * `git.readTree({ oid })` only returns *root-level* entries, so a path like
- * "src/index.js" would never be found with a flat `tree.find()`. Instead we
- * traverse each path component through the tree manually.
+ * Resolves the blob OID for a given filepath at a commit OID.
+ * Memoizes tree traversal to avoid redundant reads.
  */
-export async function readFileAtCommit(
+export async function getBlobOidAtCommit(
   dir: string,
   commitOid: string,
   filepath: string
 ): Promise<string | null> {
   try {
-    // Start at the commit's root tree
     const { commit } = await git.readCommit({ fs, dir, oid: commitOid });
-    let currentOid = commit.tree; // root tree OID
+    let currentOid = commit.tree;
 
     const parts = filepath.split('/');
     for (let i = 0; i < parts.length; i++) {
       const part = parts[i];
-      const { tree } = await git.readTree({ fs, dir, oid: currentOid });
+      
+      let tree = treeCache.get(currentOid);
+      if (!tree) {
+        const res = await git.readTree({ fs, dir, oid: currentOid });
+        tree = res.tree;
+        treeCache.set(currentOid, tree);
+      }
+      
       const entry = tree.find((e) => e.path === part);
       if (!entry) return null;
 
       if (i === parts.length - 1) {
-        // Last segment — should be a blob
-        const { blob } = await git.readBlob({ fs, dir, oid: entry.oid });
-        return new TextDecoder().decode(blob);
+        return entry.oid;
       } else {
-        // Intermediate segment — descend into subtree
         currentOid = entry.oid;
       }
     }
@@ -206,4 +210,15 @@ export async function readFileAtCommit(
   } catch {
     return null;
   }
+}
+
+/**
+ * Reads the raw text content of a blob given its OID.
+ */
+export async function readBlobContent(
+  dir: string,
+  blobOid: string
+): Promise<string> {
+  const { blob } = await git.readBlob({ fs, dir, oid: blobOid });
+  return new TextDecoder().decode(blob);
 }
