@@ -6,9 +6,10 @@ import Tooltip from './Chart/Tooltip';
 
 interface ChartProps {
   data: BlameDataPoint[];
+  xDomain?: [string, string];
 }
 
-const Chart: React.FC<ChartProps> = ({ data }) => {
+const Chart: React.FC<ChartProps> = ({ data, xDomain }) => {
   const chartRef = useRef<HTMLDivElement>(null);
   const [selectedDateData, setSelectedDateData] = useState<{ commitDate: string; filesData: Record<string, number> } | null>(null);
   
@@ -32,7 +33,8 @@ const Chart: React.FC<ChartProps> = ({ data }) => {
                 field: 'commit_date',
                 type: 'temporal',
                 title: null,
-                axis: { format: '%Y-%m', grid: false, labelColor: '#6e7781' }
+                axis: { format: '%Y-%m', grid: false, labelColor: '#6e7781' },
+                ...(xDomain ? { scale: { domain: xDomain } } : {})
               },
               y: {
                 field: 'line_count',

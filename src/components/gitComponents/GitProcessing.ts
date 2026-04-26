@@ -108,6 +108,7 @@ export class GitArchaeology {
       startDate?: string;
       endDate?: string;
       granularity?: GranularityUnit;
+      onPartialSnapshotData?: (snapshotData: { data: Record<string, FileLinesPreserved[]> }, timePoints: number[]) => void;
     }
   ): Promise<{ data: Record<string, FileLinesPreserved[]>; timePoints: number[] }> {
     if (!options?.skipClone) {
@@ -214,6 +215,10 @@ export class GitArchaeology {
         previousResult = currentFileList;
         previousCommitHash = commit.oid;
         previousDate = date0;
+        
+        if (options?.onPartialSnapshotData) {
+            options.onPartialSnapshotData({ data }, timePoints);
+        }
     }
 
     return { data, timePoints };
@@ -316,9 +321,18 @@ export class GitArchaeology {
       startDate?: string;
       endDate?: string;
       granularity?: GranularityUnit;
-    }
+    },
+    onPartialData?: (data: BlameDataPoint[], timePoints: number[]) => void
   ): Promise<BlameDataPoint[]> {
-    const snapshotData = await this.GetFileLinesPerPeriod(onProgress, options);
+    const snapshotData = await this.GetFileLinesPerPeriod(onProgress, {
+        ...options,
+        onPartialSnapshotData: (partialSnapshot, timePoints) => {
+            if (onPartialData) {
+                const partialBlame = this.GetFilesLInesThatSurvivedOnEachPeriod(partialSnapshot);
+                onPartialData(partialBlame, timePoints);
+            }
+        }
+    });
     return this.GetFilesLInesThatSurvivedOnEachPeriod(snapshotData);
   }
 

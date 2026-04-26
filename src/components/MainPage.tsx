@@ -1,4 +1,4 @@
-import React, { useEffect, useCallback } from 'react';
+import React, { useEffect, useCallback, useState } from 'react';
 import { GitArchaeology } from './gitComponents/GitProcessing';
 import { type GranularityUnit } from './gitComponents/GitProcessing';
 import { cloneRepo } from './gitComponents/GitDownload';
@@ -31,6 +31,7 @@ const MainPage: React.FC<MainPageProps> = ({
   } = useStore();
 
   const isInitializing = React.useRef(false);
+  const [xDomain, setXDomain] = useState<[string, string] | undefined>(undefined);
 
   const startInitialClone = useCallback(async () => {
     if (isInitializing.current) return;
@@ -112,6 +113,14 @@ const MainPage: React.FC<MainPageProps> = ({
           startDate: options.startDate,
           endDate: options.endDate,
           granularity: options.granularity
+        },
+        (partialData, timePoints) => {
+            setData([...partialData]); // Create new array reference for React
+            if (timePoints.length > 1) {
+               const startStr = new Date(timePoints[0] * 1000).toISOString().split('T')[0];
+               const endStr = new Date(timePoints[timePoints.length - 1] * 1000).toISOString().split('T')[0];
+               setXDomain([startStr, endStr]);
+            }
         }
       );
       
@@ -162,7 +171,7 @@ const MainPage: React.FC<MainPageProps> = ({
 
         <ProgressStateAndBar state={state} progress={progress} />
 
-        {state === 'done' && data.length > 0 && <Chart data={data} />}
+        {(state === 'done' || state === 'processing repo') && data.length > 0 && <Chart data={data} xDomain={xDomain} />}
         
         {state === 'done' && data.length === 0 && !progress && (
           <div className="text-center mt-5 text-muted">

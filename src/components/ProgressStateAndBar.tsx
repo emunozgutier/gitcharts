@@ -11,7 +11,7 @@ const ProgressStateAndBar: React.FC<ProgressStateAndBarProps> = ({ state, progre
   }
 
   return (
-    <div className="position-absolute top-50 start-50 translate-middle text-center w-75">
+    <div className="position-absolute top-0 start-50 translate-middle-x text-center w-75 mt-4 z-3 bg-white p-3 rounded shadow-sm" style={{ opacity: 0.9 }}>
       <div className="spinner-grow text-primary mb-3" role="status"></div>
       <div className="h4 fw-bold mb-2">{progress}</div>
       <div className="progress" style={{ height: '4px' }}>
