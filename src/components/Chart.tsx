@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import embed from 'vega-embed';
 import { type BlameDataPoint } from '../store/useStore';
 import FileList from './Chart/FileList';
+import Tooltip from './Chart/Tooltip';
 
 interface ChartProps {
   data: BlameDataPoint[];
@@ -10,6 +11,10 @@ interface ChartProps {
 const Chart: React.FC<ChartProps> = ({ data }) => {
   const chartRef = useRef<HTMLDivElement>(null);
   const [selectedDateData, setSelectedDateData] = useState<{ commitDate: string; filesData: Record<string, number> } | null>(null);
+  
+  // Custom tooltip state
+  const [tooltipInfo, setTooltipInfo] = useState<{ date: string; periods: {period: string, count: number}[] } | null>(null);
+  const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
 
   useEffect(() => {
     if (data.length > 0 && chartRef.current) {
@@ -21,7 +26,7 @@ const Chart: React.FC<ChartProps> = ({ data }) => {
         data: { values: data },
         layer: [
           {
-            mark: { type: 'area', line: { color: '#fff', strokeWidth: 0.5 }, tooltip: true },
+            mark: { type: 'area', line: { color: '#fff', strokeWidth: 0.5 } },
             encoding: {
               x: {
                 field: 'commit_date',
@@ -53,12 +58,7 @@ const Chart: React.FC<ChartProps> = ({ data }) => {
               order: {
                  field: 'period',
                  sort: 'ascending'
-              },
-              tooltip: [
-                { field: 'commit_date', title: 'Snapshot', type: 'temporal', format: '%b %Y' },
-                { field: 'period', title: 'Code from' },
-                { field: 'line_count', title: 'Lines', format: ',' }
-              ]
+              }
             }
           },
           {
@@ -88,15 +88,13 @@ const Chart: React.FC<ChartProps> = ({ data }) => {
         }
       };
 
-      embed(chartRef.current, spec, { actions: false }).then(result => {
+      embed(chartRef.current, spec, { actions: false, tooltip: false }).then(result => {
         result.view.addEventListener('click', (_event, item) => {
           if (item && item.datum && item.datum.commit_date) {
             const commitDate = item.datum.commit_date;
             
-            // Aggregate all files for this commit_date
             const filesForDate: Record<string, number> = {};
             data.forEach(d => {
-              // Convert both to time to compare accurately in case format varies
               if (new Date(d.commit_date).getTime() === new Date(commitDate).getTime() && d.files) {
                 for (const [filename, count] of Object.entries(d.files)) {
                   filesForDate[filename] = (filesForDate[filename] || 0) + count;
@@ -108,8 +106,37 @@ const Chart: React.FC<ChartProps> = ({ data }) => {
               commitDate,
               filesData: filesForDate
             });
+            // Hide tooltip when modal opens
+            setTooltipInfo(null);
           }
         });
+
+        result.view.addEventListener('mousemove', (event: any) => {
+          setTooltipPos({ x: event.clientX, y: event.clientY });
+        });
+
+        result.view.addSignalListener('hover', (_name, value) => {
+           if (value && Object.keys(value).length > 0 && value.commit_date && value.commit_date[0]) {
+             const hoveredTime = value.commit_date[0];
+             const matchedData = data.filter(d => new Date(d.commit_date).getTime() === hoveredTime);
+             if (matchedData.length > 0) {
+               const dateStr = matchedData[0].commit_date;
+               const periods = matchedData
+                  .map(d => ({ period: d.period, count: d.line_count }))
+                  .sort((a,b) => b.period.localeCompare(a.period));
+               setTooltipInfo({ date: dateStr, periods });
+             } else {
+               setTooltipInfo(null);
+             }
+           } else {
+             setTooltipInfo(null);
+           }
+        });
+
+        result.view.addEventListener('mouseout', () => {
+           setTooltipInfo(null);
+        });
+
       }).catch(console.error);
     }
   }, [data]);
@@ -117,6 +144,16 @@ const Chart: React.FC<ChartProps> = ({ data }) => {
   return (
     <div className="chart-wrapper h-100 w-100 position-relative">
       <div ref={chartRef} className="w-100 h-100" style={{ cursor: 'pointer' }}></div>
+      
+      {tooltipInfo && !selectedDateData && (
+        <Tooltip 
+          x={tooltipPos.x} 
+          y={tooltipPos.y} 
+          date={tooltipInfo.date} 
+          periods={tooltipInfo.periods} 
+        />
+      )}
+
       {selectedDateData && (
         <FileList 
           commitDate={selectedDateData.commitDate}
