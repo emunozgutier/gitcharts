@@ -190,8 +190,13 @@ export class GitArchaeology {
         }
 
         const currentFileList: FileLinesPreserved[] = [];
+        const totalFiles = files.length;
 
-        for (const filepath of files) {
+        for (let fIdx = 0; fIdx < totalFiles; fIdx++) {
+            const filepath = files[fIdx];
+            if (onProgress && (fIdx % 5 === 0 || fIdx === totalFiles - 1)) {
+                onProgress(`Processing SNAPSHOT ${date0} (${i + 1}/${timePoints.length}) - Files: ${fIdx + 1}/${totalFiles}...`);
+            }
             try {
                 const content = await withTimeout(
                     readFileAtCommit(this.dir, commit.oid, filepath),
