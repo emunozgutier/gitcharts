@@ -30,7 +30,11 @@ const MainPage: React.FC<MainPageProps> = ({
     updateCache
   } = useStore();
 
+  const isInitializing = React.useRef(false);
+
   const startInitialClone = useCallback(async () => {
+    if (isInitializing.current) return;
+    isInitializing.current = true;
     setState('searching for repo name');
     setProgress("Connecting to GitHub API...");
     
@@ -65,6 +69,8 @@ const MainPage: React.FC<MainPageProps> = ({
       setProgress(`Error: ${err.message || "Failed to initialize"}`);
       console.error(err);
       setState('FAILURE during download');
+    } finally {
+      isInitializing.current = false;
     }
   }, [repoFullName, setState, setProgress, setRepoInfo, setStats]);
 

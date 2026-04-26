@@ -78,7 +78,18 @@ export async function cloneRepo(opts: CloneOptions): Promise<void> {
   // that were fetched before code fixes.
   if (onProgress) onProgress('Clearing previous clone...');
   await rmrf(dir);
-  await pfs.mkdir(dir);
+  
+  // Recursively create directories
+  const parts = dir.split('/').filter(Boolean);
+  let currentPath = '';
+  for (const part of parts) {
+    currentPath += `/${part}`;
+    try {
+      await pfs.stat(currentPath);
+    } catch {
+      await pfs.mkdir(currentPath);
+    }
+  }
 
   await withTimeout(
     git.clone({
