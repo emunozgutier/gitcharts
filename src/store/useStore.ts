@@ -6,6 +6,7 @@ export interface BlameDataPoint {
   commit_date: string;
   period: string;
   line_count: number;
+  files?: Record<string, number>;
 }
 
 export interface RepoStats {

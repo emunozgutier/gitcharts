@@ -22,6 +22,7 @@ export interface BlameDataPoint {
   commit_date: string; // YYYY-MM-DD snapshot date
   period: string;      // Label for the period the lines originated (e.g. "2024-Q1")
   line_count: number;
+  files?: Record<string, number>; // filename -> line_count
 }
 
 export interface LineHistory {
@@ -257,9 +258,12 @@ export class GitArchaeology {
         if (!currentFileList) continue;
 
         const counts: Record<string, number> = {};
+        const fileBreakdown: Record<string, Record<string, number>> = {};
+        
         // Initialize counts for all dates (periods) seen up to now to 0
         for (let k = 0; k <= j; k++) {
             counts[dateKeys[k]] = 0;
+            fileBreakdown[dateKeys[k]] = {};
         }
 
         for (const currentFile of currentFileList) {
@@ -274,6 +278,9 @@ export class GitArchaeology {
                 if (prevFile && fileToProcess.filelines.length > 0) {
                     const [countUpdate, remainingFile] = this.GetLinesThatSurvived(prevFile, fileToProcess);
                     counts[prevDate] += countUpdate;
+                    if (countUpdate > 0) {
+                        fileBreakdown[prevDate][currentFile.filename] = countUpdate;
+                    }
                     fileToProcess = remainingFile;
                 }
             }
@@ -281,10 +288,18 @@ export class GitArchaeology {
             // Finally, any lines that never appeared in any previous batch
             // are attributed to the current batch
             counts[currentDate] += fileToProcess.filelines.length;
+            if (fileToProcess.filelines.length > 0) {
+                fileBreakdown[currentDate][currentFile.filename] = fileToProcess.filelines.length;
+            }
         }
 
         for (const [period, count] of Object.entries(counts)) {
-            results.push({ commit_date: currentDate, period, line_count: count });
+            results.push({ 
+                commit_date: currentDate, 
+                period, 
+                line_count: count,
+                files: fileBreakdown[period] 
+            });
         }
     }
 

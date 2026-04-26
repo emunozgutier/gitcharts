@@ -1,6 +1,7 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import embed from 'vega-embed';
-import { type BlameDataPoint } from './gitComponents/GitProcessing';
+import { type BlameDataPoint } from '../store/useStore';
+import FileExploration from './Chart/FileExploration';
 
 interface ChartProps {
   data: BlameDataPoint[];
@@ -8,6 +9,7 @@ interface ChartProps {
 
 const Chart: React.FC<ChartProps> = ({ data }) => {
   const chartRef = useRef<HTMLDivElement>(null);
+  const [selectedDatum, setSelectedDatum] = useState<BlameDataPoint | null>(null);
 
   useEffect(() => {
     if (data.length > 0 && chartRef.current) {
@@ -18,6 +20,12 @@ const Chart: React.FC<ChartProps> = ({ data }) => {
         autosize: { type: 'fit', contains: 'padding' },
         data: { values: data },
         mark: { type: 'area', line: { color: '#fff', strokeWidth: 0.5 }, tooltip: true },
+        selection: {
+          layer_click: {
+            type: "point",
+            on: "click"
+          }
+        },
         encoding: {
           x: {
             field: 'commit_date',
@@ -62,13 +70,25 @@ const Chart: React.FC<ChartProps> = ({ data }) => {
         }
       };
 
-      embed(chartRef.current, spec, { actions: false }).catch(console.error);
+      embed(chartRef.current, spec, { actions: false }).then(result => {
+        result.view.addEventListener('click', (event, item) => {
+          if (item && item.datum) {
+            setSelectedDatum(item.datum as BlameDataPoint);
+          }
+        });
+      }).catch(console.error);
     }
   }, [data]);
 
   return (
-    <div className="chart-wrapper h-100 w-100">
-      <div ref={chartRef} className="w-100 h-100"></div>
+    <div className="chart-wrapper h-100 w-100 position-relative">
+      <div ref={chartRef} className="w-100 h-100" style={{ cursor: 'pointer' }}></div>
+      {selectedDatum && (
+        <FileExploration 
+          datum={selectedDatum} 
+          onClose={() => setSelectedDatum(null)} 
+        />
+      )}
     </div>
   );
 };
