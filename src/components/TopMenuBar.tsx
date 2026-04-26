@@ -7,7 +7,7 @@ interface TopMenuBarProps {
 }
 
 const TopMenuBar: React.FC<TopMenuBarProps> = ({ selectedRepo, onRepoSelect }) => {
-  const { stats, progress, analysisState } = useStore();
+  const { stats } = useStore();
 
   return (
     <nav className="navbar navbar-expand-lg navbar-dark bg-dark shadow-sm py-1 sticky-top">
@@ -54,12 +54,7 @@ const TopMenuBar: React.FC<TopMenuBarProps> = ({ selectedRepo, onRepoSelect }) =
                   <div className="text-light opacity-50 small">Loading stats...</div>
                 )}
               </div>
-              {(analysisState === 'Downloading repo' || analysisState === 'processing repo' || analysisState === 'searching for repo name' || progress) && (
-                <div className="d-flex align-items-center gap-2 bg-dark bg-opacity-50 px-3 py-1 rounded-pill border border-secondary">
-                  <div className="spinner-border spinner-border-sm text-primary" style={{ width: '0.75rem', height: '0.75rem' }}></div>
-                  <span className="smallest text-light opacity-75">{progress || 'Syncing...'}</span>
-                </div>
-              )}
+
             </div>
           </div>
         </div>
