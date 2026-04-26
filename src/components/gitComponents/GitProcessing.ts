@@ -157,6 +157,7 @@ export class GitArchaeology {
     let previousResult: FileLinesPreserved[] | null = null;
     let previousCommitHash: string | null = null;
     let previousDate: string | null = null;
+    let lastPartialUpdateTs = Date.now();
 
     for (let i = 0; i < timePoints.length; i++) {
         const snapshotTs = timePoints[i];
@@ -178,6 +179,13 @@ export class GitArchaeology {
         if (commit.oid === previousCommitHash && previousResult !== null && previousDate !== null) {
             data[date0] = previousResult;
             previousDate = date0;
+            
+            const now = Date.now();
+            if (options?.onPartialSnapshotData && (now - lastPartialUpdateTs > 3000)) {
+                lastPartialUpdateTs = now;
+                options.onPartialSnapshotData({ data }, timePoints);
+                await new Promise(r => setTimeout(r, 0));
+            }
             continue;
         }
 
@@ -218,6 +226,15 @@ export class GitArchaeology {
                     });
                 }
             } catch {}
+            
+            // Yield partial data during long file loops
+            const loopNow = Date.now();
+            if (options?.onPartialSnapshotData && (loopNow - lastPartialUpdateTs > 3000)) {
+                lastPartialUpdateTs = loopNow;
+                data[date0] = currentFileList;
+                options.onPartialSnapshotData({ data }, timePoints);
+                await new Promise(r => setTimeout(r, 0));
+            }
         }
 
         data[date0] = currentFileList;
@@ -225,8 +242,11 @@ export class GitArchaeology {
         previousCommitHash = commit.oid;
         previousDate = date0;
         
-        if (options?.onPartialSnapshotData) {
+        const endNow = Date.now();
+        if (options?.onPartialSnapshotData && (endNow - lastPartialUpdateTs > 3000)) {
+            lastPartialUpdateTs = endNow;
             options.onPartialSnapshotData({ data }, timePoints);
+            await new Promise(r => setTimeout(r, 0));
         }
     }
 
