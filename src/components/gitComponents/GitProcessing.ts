@@ -123,8 +123,11 @@ export class GitArchaeology {
 
     const requestedPoints = options?.depth || 50;
     const fetchDepth = Math.max(2000, requestedPoints * 2); 
+    
+    if (onProgress) onProgress('Reading commit history...');
     let commits = await readCommitLog(this.dir, fetchDepth);
 
+    if (onProgress) onProgress('Generating snapshot timeline...');
     // Apply date filters if provided
     if (options?.startDate || options?.endDate) {
       const start = options.startDate ? new Date(options.startDate + 'T00:00:00.001Z').getTime() : 0;
