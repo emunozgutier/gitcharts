@@ -13,8 +13,6 @@ import {
   withTimeout,
 } from './GitDownload';
 
-import _ from 'lodash';
-
 
 // ── Public types ──────────────────────────────────────────────────────────────
 
@@ -146,7 +144,9 @@ export class GitArchaeology {
     const timePoints: number[] = [];
     if (requestedPoints > 1) {
       const step = (endTs - startTs) / (requestedPoints - 1);
-      timePoints.push(..._.times(requestedPoints, i => startTs + i * step));
+      for (let i = 0; i < requestedPoints; i++) {
+        timePoints.push(startTs + i * step);
+      }
     } else {
       timePoints.push(endTs);
     }
@@ -200,14 +200,16 @@ export class GitArchaeology {
 
         const currentFileList: FileLinesPreserved[] = [];
         const totalFiles = files.length;
-        const fileChunks = _.chunk(files, 50);
         let processedFiles = 0;
         
         const blobParsedCache = new Map<string, string[]>();
 
-        for (const chunk of fileChunks) {
-            const chunkResults = await Promise.all(
-                chunk.map(async (filepath) => {
+        for (let chunkStart = 0; chunkStart < totalFiles; chunkStart += 50) {
+            const chunk = files.slice(chunkStart, chunkStart + 50);
+            
+            const chunkPromises: Promise<FileLinesPreserved | null>[] = [];
+            for (const filepath of chunk) {
+                chunkPromises.push((async () => {
                     try {
                         const blobOid = await getBlobOidAtCommit(this.dir, commit.oid, filepath);
                         if (!blobOid) return null;
@@ -225,8 +227,13 @@ export class GitArchaeology {
                             `Reading ${filepath}`
                         );
                         if (content !== null) {
-                            const lines = content.split('\n')
-                                .filter(line => line.trim().length > 0);
+                            const lines: string[] = [];
+                            const splitLines = content.split('\n');
+                            for (const line of splitLines) {
+                                if (line.trim().length > 0) {
+                                    lines.push(line);
+                                }
+                            }
                             
                             blobParsedCache.set(blobOid, lines);
 
@@ -237,10 +244,14 @@ export class GitArchaeology {
                         }
                     } catch {}
                     return null;
-                })
-            );
+                })());
+            }
+
+            const chunkResults = await Promise.all(chunkPromises);
+            for (const r of chunkResults) {
+                if (r !== null) currentFileList.push(r);
+            }
             
-            currentFileList.push(...chunkResults.filter((r): r is FileLinesPreserved => r !== null));
             processedFiles += chunk.length;
 
             if (onProgress) {
@@ -274,18 +285,22 @@ export class GitArchaeology {
   }
 
   private GetLinesThatSurvived(fileBefore: FileLinesPreserved, fileAfter: FileLinesPreserved): [number, FileLinesPreserved] {
-    // Optimization: Use _.countBy instead of _.groupBy to avoid array allocations
-    // and expensive O(N) .shift() operations on large arrays of identical lines.
-    const poolCounts = _.countBy(fileBefore.filelines);
+    const poolCounts: Record<string, number> = {};
+    for (const line of fileBefore.filelines) {
+        poolCounts[line] = (poolCounts[line] || 0) + 1;
+    }
+    
     let survivingCount = 0;
-    const notFoundLines = fileAfter.filelines.filter(line => {
+    const notFoundLines: string[] = [];
+    
+    for (const line of fileAfter.filelines) {
       if (poolCounts[line] > 0) {
         survivingCount++;
         poolCounts[line]--;
-        return false;
+      } else {
+        notFoundLines.push(line);
       }
-      return true;
-    });
+    }
 
     return [
       survivingCount,
@@ -301,57 +316,73 @@ export class GitArchaeology {
   ): BlameDataPoint[] {
     const { data } = snapshotData;
     const dateKeys = Object.keys(data).sort();
+    const results: BlameDataPoint[] = [];
     
-    // Filter out dates with no snapshot data and flatMap to generate all data points
-    const results = _.flatMap(_.filter(dateKeys, date => !!data[date]), currentDate => {
-        const originalIndex = dateKeys.indexOf(currentDate);
+    // For each snapshot J, we find where its lines came from by checking 0 to J-1
+    for (let j = 0; j < dateKeys.length; j++) {
+        const currentDate = dateKeys[j];
         const currentFileList = data[currentDate];
-        const previousDates = dateKeys.slice(0, originalIndex + 1);
+
+        if (!currentFileList) continue;
+
+        const counts: Record<string, number> = {};
+        const fileBreakdown: Record<string, Record<string, number>> = {};
         
-        // Initialize counts and fileBreakdown using lodash mapping
-        const counts = _.fromPairs(_.map(previousDates, date => [date, 0]));
-        const fileBreakdown: Record<string, Record<string, number>> = _.fromPairs(_.map(previousDates, date => [date, {}]));
+        // Initialize counts for all dates (periods) seen up to now to 0
+        for (let k = 0; k <= j; k++) {
+            counts[dateKeys[k]] = 0;
+            fileBreakdown[dateKeys[k]] = {};
+        }
 
-        // Process only files that have lines
-        const validFiles = _.filter(currentFileList, file => file.filelines.length > 0);
-        
-        _.forEach(validFiles, currentFile => {
-            const initialFileToProcess = { ...currentFile, filelines: [...currentFile.filelines] };
-            const previousDatesToCheck = dateKeys.slice(0, originalIndex);
+        for (const currentFile of currentFileList) {
+            if (currentFile.filelines.length === 0) continue;
 
-            // Functionally reduce the file's lines against all previous snapshots
-            const finalFileToProcess = _.reduce(previousDatesToCheck, (fileState, prevDate) => {
-                if (fileState.filelines.length === 0) return fileState;
+            let fileToProcess = { ...currentFile, filelines: [...currentFile.filelines] };
 
+            // Check against ALL previous snapshots in order
+            for (let i = 0; i < j; i++) {
+                const prevDate = dateKeys[i];
                 const prevFileList = data[prevDate];
-                const prevFile = _.find(prevFileList, f => f.filename === fileState.filename);
+                
+                // Find file in previous snapshot
+                let prevFile: FileLinesPreserved | undefined;
+                if (prevFileList) {
+                    for (const f of prevFileList) {
+                        if (f.filename === fileToProcess.filename) {
+                            prevFile = f;
+                            break;
+                        }
+                    }
+                }
 
-                if (prevFile) {
-                    const [countUpdate, remainingFile] = this.GetLinesThatSurvived(prevFile, fileState);
+                if (prevFile && fileToProcess.filelines.length > 0) {
+                    const [countUpdate, remainingFile] = this.GetLinesThatSurvived(prevFile, fileToProcess);
                     counts[prevDate] += countUpdate;
                     if (countUpdate > 0) {
-                        fileBreakdown[prevDate][fileState.filename] = countUpdate;
+                        fileBreakdown[prevDate][currentFile.filename] = countUpdate;
                     }
-                    return remainingFile;
+                    fileToProcess = remainingFile;
                 }
-                return fileState;
-            }, initialFileToProcess);
-
-            // Any remaining lines are attributed to the current batch
-            counts[currentDate] += finalFileToProcess.filelines.length;
-            if (finalFileToProcess.filelines.length > 0) {
-                fileBreakdown[currentDate][currentFile.filename] = finalFileToProcess.filelines.length;
             }
-        });
 
-        // Transform the counts dictionary into an array of BlameDataPoints
-        return _.map(counts, (count, period) => ({
-            commit_date: currentDate,
-            period,
-            line_count: count,
-            files: fileBreakdown[period]
-        }));
-    });
+            // Finally, any lines that never appeared in any previous batch
+            // are attributed to the current batch
+            counts[currentDate] += fileToProcess.filelines.length;
+            if (fileToProcess.filelines.length > 0) {
+                fileBreakdown[currentDate][currentFile.filename] = fileToProcess.filelines.length;
+            }
+        }
+
+        for (const period of Object.keys(counts)) {
+            const count = counts[period];
+            results.push({ 
+                commit_date: currentDate, 
+                period, 
+                line_count: count,
+                files: fileBreakdown[period] 
+            });
+        }
+    }
 
     return results.sort((a, b) => a.commit_date.localeCompare(b.commit_date));
   }
@@ -405,15 +436,22 @@ export class GitArchaeology {
     const allFiles = await listAllFiles(this.dir, latestOid);
     const files = allFiles.filter(isCodeFile);
 
-    const extensionsCounts = _.countBy(files, file => {
-      const extMatch = file.match(/\.([^.]+)$/);
-      return extMatch ? extMatch[0] : 'no-ext';
-    });
+    const extensionsCounts: Record<string, number> = {};
+    const foldersCounts: Record<string, number> = {};
 
-    const foldersCounts = _.countBy(files, file => {
+    for (const file of files) {
+      let folder = '.';
       const parts = file.split('/');
-      return parts.length > 1 ? parts.slice(0, -1).join('/') : '.';
-    });
+      if (parts.length > 1) {
+        folder = parts.slice(0, -1).join('/');
+      }
+
+      const extMatch = file.match(/\.([^.]+)$/);
+      const ext = extMatch ? extMatch[0] : 'no-ext';
+
+      extensionsCounts[ext] = (extensionsCounts[ext] || 0) + 1;
+      foldersCounts[folder] = (foldersCounts[folder] || 0) + 1;
+    }
 
     return {
       extensions: extensionsCounts,
