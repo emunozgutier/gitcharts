@@ -40,6 +40,7 @@ export async function withTimeout<T>(
 export interface CloneOptions {
   dir: string;
   repoUrl: string;
+  ref?: string;
   depth?: number;
   onProgress?: (msg: string) => void;
 }
@@ -96,7 +97,7 @@ export async function wipeAllFs(): Promise<void> {
  * Creates the target directory if it doesn't already exist.
  */
 export async function cloneRepo(opts: CloneOptions): Promise<void> {
-  const { dir, repoUrl, depth = 100, onProgress } = opts;
+  const { dir, repoUrl, ref, depth = 100, onProgress } = opts;
 
   // Always wipe the previous clone so we never reuse stale git objects
   // that were fetched before code fixes.
@@ -120,6 +121,7 @@ export async function cloneRepo(opts: CloneOptions): Promise<void> {
     http,
     dir,
     url: repoUrl,
+    ref,
     corsProxy: 'https://cors.isomorphic-git.org',
     singleBranch: true,
     depth,

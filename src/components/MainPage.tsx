@@ -12,6 +12,8 @@ interface MainPageProps {
   repoFullName: string;
 }
 
+let globalIsCloning = false;
+
 const MainPage: React.FC<MainPageProps> = ({ 
   repoFullName, 
 }) => {
@@ -30,12 +32,11 @@ const MainPage: React.FC<MainPageProps> = ({
     updateCache
   } = useStore();
 
-  const isInitializing = React.useRef(false);
   const [xDomain, setXDomain] = useState<[string, string] | undefined>(undefined);
 
   const startInitialClone = useCallback(async () => {
-    if (isInitializing.current) return;
-    isInitializing.current = true;
+    if (globalIsCloning) return;
+    globalIsCloning = true;
     setState('searching for repo name');
     setProgress("Connecting to GitHub API...");
     
@@ -57,6 +58,7 @@ const MainPage: React.FC<MainPageProps> = ({
       await cloneRepo({
         dir: archaeology.dir,
         repoUrl: archaeology.repoUrl,
+        ref: repoData.default_branch,
         depth: 100,
         onProgress: (msg: string) => setProgress(msg),
       });
@@ -71,7 +73,7 @@ const MainPage: React.FC<MainPageProps> = ({
       console.error(err);
       setState('FAILURE during download');
     } finally {
-      isInitializing.current = false;
+      globalIsCloning = false;
     }
   }, [repoFullName, setState, setProgress, setRepoInfo, setStats]);
 
