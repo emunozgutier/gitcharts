@@ -254,19 +254,18 @@ export class GitArchaeology {
   }
 
   private GetLinesThatSurvived(fileBefore: FileLinesPreserved, fileAfter: FileLinesPreserved): [number, FileLinesPreserved] {
-    const poolGroups = _.groupBy(fileBefore.filelines, 'content');
-    const notFoundLines: LineHistory[] = [];
+    // Optimization: Use _.countBy instead of _.groupBy to avoid array allocations
+    // and expensive O(N) .shift() operations on large arrays of identical lines.
+    const poolCounts = _.countBy(fileBefore.filelines, 'content');
     let survivingCount = 0;
-
-    for (const line of fileAfter.filelines) {
-      const group = poolGroups[line.content];
-      if (group && group.length > 0) {
+    const notFoundLines = fileAfter.filelines.filter(line => {
+      if (poolCounts[line.content] > 0) {
         survivingCount++;
-        group.shift();
-      } else {
-        notFoundLines.push(line);
+        poolCounts[line.content]--;
+        return false;
       }
-    }
+      return true;
+    });
 
     return [
       survivingCount,
