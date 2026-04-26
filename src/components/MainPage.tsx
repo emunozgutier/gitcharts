@@ -1,4 +1,4 @@
-import React, { useEffect, useCallback, useState } from 'react';
+import React, { useEffect, useCallback, useState, useRef } from 'react';
 import { GitArchaeology } from './gitComponents/GitProcessing';
 import { type GranularityUnit } from './gitComponents/GitProcessing';
 import { cloneRepo } from './gitComponents/GitDownload';
@@ -33,6 +33,7 @@ const MainPage: React.FC<MainPageProps> = ({
   } = useStore();
 
   const [xDomain, setXDomain] = useState<[string, string] | undefined>(undefined);
+  const archaeologyRef = useRef<GitArchaeology | null>(null);
 
   const startInitialClone = useCallback(async () => {
     if (globalIsCloning) return;
@@ -53,6 +54,7 @@ const MainPage: React.FC<MainPageProps> = ({
       setStats(currentStats);
 
       const archaeology = new GitArchaeology(repoFullName);
+      archaeologyRef.current = archaeology;
       // step 1: download only
       setState('Downloading repo');
       await cloneRepo({
@@ -103,7 +105,8 @@ const MainPage: React.FC<MainPageProps> = ({
     setProgress("Analyzing commit history...");
     
     try {
-      const archaeology = new GitArchaeology(repoFullName);
+      const archaeology = archaeologyRef.current;
+      if (!archaeology) throw new Error("Repository not initialized. Please try again.");
       // step 2: run analysis on already downloaded repo
       const results = await archaeology.run(
         (msg) => setProgress(msg), 

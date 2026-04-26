@@ -157,42 +157,44 @@ const Settings: React.FC<SettingsProps> = ({ extensions, folders, folderLines, t
   };
 
   return (
-    <div className="settings card shadow-sm p-4 h-100 overflow-auto border-0">
-      <h3 className="h5 mb-4 fw-bold d-flex align-items-center">
-        <span className="me-2">⚙️</span> Analysis Settings
-      </h3>
-      
-      <TimeFrameAndPoints
-        timeRange={timeRange}
-        minVal={minVal}
-        maxVal={maxVal}
-        setMinVal={setMinVal}
-        setMaxVal={setMaxVal}
-        setDepth={setDepth}
-        safeMaxPoints={safeMaxPoints}
-        effectiveDepth={effectiveDepth}
-        distanceDays={distanceDays}
-        commitsInRange={commitsInRange}
-        commitTimestamps={commitTimestamps}
-      />
-
-      <div className="row g-4 mb-4">
-        <FileTypesAndFolderStructure
-          topExtensions={topExtensions}
-          selectedExtensions={selectedExtensions}
-          toggleExtension={toggleExtension}
-          folderTree={folderTree}
-          selectedFolders={selectedFolders}
-          setSelectedFolders={setSelectedFolders}
-          folders={folders}
-          topLevelTotalLines={topLevelTotalLines}
-          expandedFolders={expandedFolders}
-          toggleExpand={toggleExpand}
-          toggleFolderNode={toggleFolderNode}
+    <div className="settings card shadow-sm p-4 h-100 border-0 d-flex flex-column">
+      <div className="flex-grow-1 overflow-auto pe-2" style={{ minHeight: 0 }}>
+        <h3 className="h5 mb-4 fw-bold d-flex align-items-center">
+          <span className="me-2">⚙️</span> Analysis Settings
+        </h3>
+        
+        <TimeFrameAndPoints
+          timeRange={timeRange}
+          minVal={minVal}
+          maxVal={maxVal}
+          setMinVal={setMinVal}
+          setMaxVal={setMaxVal}
+          setDepth={setDepth}
+          safeMaxPoints={safeMaxPoints}
+          effectiveDepth={effectiveDepth}
+          distanceDays={distanceDays}
+          commitsInRange={commitsInRange}
+          commitTimestamps={commitTimestamps}
         />
+
+        <div className="row g-4 mb-4">
+          <FileTypesAndFolderStructure
+            topExtensions={topExtensions}
+            selectedExtensions={selectedExtensions}
+            toggleExtension={toggleExtension}
+            folderTree={folderTree}
+            selectedFolders={selectedFolders}
+            setSelectedFolders={setSelectedFolders}
+            folders={folders}
+            topLevelTotalLines={topLevelTotalLines}
+            expandedFolders={expandedFolders}
+            toggleExpand={toggleExpand}
+            toggleFolderNode={toggleFolderNode}
+          />
+        </div>
       </div>
 
-      <div className="mt-auto pt-3 border-top">
+      <div className="mt-3 pt-3 border-top flex-shrink-0">
         <button 
           className="btn btn-primary btn-lg w-100 fw-bold py-3 rounded-pill shadow"
           onClick={() => onAnalyze({
