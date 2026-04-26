@@ -115,25 +115,25 @@ export async function cloneRepo(opts: CloneOptions): Promise<void> {
     }
   }
 
-  await withTimeout(
-    git.clone({
-      fs,
-      http,
-      dir,
-      url: repoUrl,
-      corsProxy: 'https://cors.isomorphic-git.org',
-      singleBranch: true,
-      depth,
-      onProgress: (p) => {
-        if (onProgress && p.phase) {
-          const pct = Math.round((p.loaded / (p.total || 1)) * 100);
+  await git.clone({
+    fs,
+    http,
+    dir,
+    url: repoUrl,
+    corsProxy: 'https://cors.isomorphic-git.org',
+    singleBranch: true,
+    depth,
+    onProgress: (p) => {
+      if (onProgress && p.phase) {
+        if (p.total) {
+          const pct = Math.round((p.loaded / p.total) * 100);
           onProgress(`Cloning: ${p.phase} (${pct}%)`);
+        } else {
+          onProgress(`Cloning: ${p.phase} (${p.loaded} items)`);
         }
-      },
-    }),
-    180_000, // 3 min – a deeper clone takes longer
-    'Cloning repository'
-  );
+      }
+    },
+  });
 }
 
 // ── Commit log ────────────────────────────────────────────────────────────────
