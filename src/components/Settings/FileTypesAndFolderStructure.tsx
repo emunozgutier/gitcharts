@@ -84,12 +84,12 @@ const FileTypesAndFolderStructure: React.FC<FileTypesAndFolderStructureProps> = 
       {/* File Types */}
       <div className="col-12 border-top pt-4">
         <label className="form-label text-muted small text-uppercase fw-bold mb-3 ls-1 d-block">3. File Types (Top 5)</label>
-        <div className="d-flex flex-wrap gap-2">
+        <div className="d-flex flex-nowrap gap-2 overflow-x-auto pb-2" style={{ WebkitOverflowScrolling: 'touch' }}>
           {topExtensions.map(({ ext, percentage }) => (
             <button
               key={ext}
               type="button"
-              className={`btn btn-sm rounded-pill px-3 border transition-all ${selectedExtensions.includes(ext) ? 'btn-primary shadow-sm' : 'btn-outline-secondary'}`}
+              className={`btn btn-sm rounded-pill px-3 border transition-all text-nowrap flex-shrink-0 ${selectedExtensions.includes(ext) ? 'btn-primary shadow-sm' : 'btn-outline-secondary'}`}
               onClick={() => toggleExtension(ext)}
             >
               {ext} <span className="opacity-75 ps-1">{percentage}%</span>
@@ -109,7 +109,7 @@ const FileTypesAndFolderStructure: React.FC<FileTypesAndFolderStructureProps> = 
             {selectedFolders.length === folders.length - 1 ? 'Deselect All' : 'Select All'}
           </button>
         </div>
-        <div className="folder-tree-container border rounded bg-white p-2 overflow-auto" style={{ maxHeight: '300px' }}>
+        <div className="folder-tree-container border rounded bg-white p-2">
           {folderTree.map(node => renderFolderNode(node))}
         </div>
       </div>
