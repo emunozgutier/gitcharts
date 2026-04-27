@@ -1,7 +1,7 @@
 export interface BlameLine {
   lineContent: string;
-  sourceTime: 0 | 1;
-  lineNumberTime1: number;
+  sourceTime: number;
+  lineNumber: number;
 }
 
 /**
@@ -38,7 +38,7 @@ export function GitBlame(fileATime0: string, fileATime1: string): BlameLine[] {
       continue;
     }
 
-    let sourceTime: 0 | 1 = 1; // Default to time 1
+    let sourceTime: number = 1; // Default to time 1
 
     // Check if we have an available copy of this line from time 0
     const availableCount = availableLinesTime0.get(line);
@@ -51,7 +51,69 @@ export function GitBlame(fileATime0: string, fileATime1: string): BlameLine[] {
     result.push({
       lineContent: line,
       sourceTime,
-      lineNumberTime1: currentLineNumber,
+      lineNumber: currentLineNumber,
+    });
+
+    currentLineNumber++;
+  }
+
+  return result;
+}
+
+/**
+ * Chains a new file version onto an existing blame array.
+ * This takes the output of a previous GitBlame or GitBlameChain call
+ * and compares it with the next file version in sequence.
+ * 
+ * @param previousBlame The result from the previous blame operation
+ * @param nextTimeFile The content of the file at the new time index
+ * @param newTimeIndex Optional explicit time index for new lines. If omitted, it will use max(sourceTime) + 1, or 2.
+ * @returns Array of BlameLine objects
+ */
+export function GitBlameChain(previousBlame: BlameLine[], nextTimeFile: string, newTimeIndex?: number): BlameLine[] {
+  const nextTime = newTimeIndex !== undefined 
+    ? newTimeIndex 
+    : (previousBlame.length > 0 ? Math.max(...previousBlame.map(b => b.sourceTime)) + 1 : 2);
+
+  const nextLines = nextTimeFile.split('\n');
+
+  // Map to store available source times for each line content
+  const availableLines = new Map<string, number[]>();
+
+  for (const line of previousBlame) {
+    if (line.lineContent.trim() === '') continue;
+    
+    if (!availableLines.has(line.lineContent)) {
+      availableLines.set(line.lineContent, []);
+    }
+    availableLines.get(line.lineContent)!.push(line.sourceTime);
+  }
+
+  // Sort so that we consume the oldest origins first
+  for (const times of availableLines.values()) {
+    times.sort((a, b) => a - b);
+  }
+
+  const result: BlameLine[] = [];
+  let currentLineNumber = 1;
+
+  for (const line of nextLines) {
+    if (line.trim() === '') {
+      currentLineNumber++;
+      continue;
+    }
+
+    let sourceTime = nextTime;
+
+    const times = availableLines.get(line);
+    if (times !== undefined && times.length > 0) {
+      sourceTime = times.shift()!;
+    }
+
+    result.push({
+      lineContent: line,
+      sourceTime,
+      lineNumber: currentLineNumber,
     });
 
     currentLineNumber++;
