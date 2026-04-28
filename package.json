@@ -10,7 +10,7 @@
     "preview": "vite preview",
     "predeploy": "npm run build",
     "deploy": "gh-pages -d dist",
-    "test": "npx tsx tests/GitProcessingVerB.test.ts"
+    "test": "npx tsx tests/GitBlame.test.ts"
   },
   "dependencies": {
     "@isomorphic-git/lightning-fs": "^4.6.2",

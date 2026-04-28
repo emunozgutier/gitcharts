@@ -14,7 +14,7 @@ import {
 } from './GitDownload';
 
 import { isCodeFile } from './GitScan';
-import { GitBlameAnalyzer } from './GitProcessingVerB';
+import { GitBlameAnalyzer } from './GitBlame';
 
 // ── Public types ──────────────────────────────────────────────────────────────
 

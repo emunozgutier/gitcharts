@@ -3,7 +3,6 @@ import type { FileLinesPreserved, BlameDataPoint } from './GitProcessing';
 export interface BlameLine {
   lineContent: string;
   sourceTime: number;
-  lineNumber: number;
 }
 
 /**
@@ -17,28 +16,32 @@ export interface BlameLine {
  * @returns Array of BlameLine objects
  */
 export function GitBlame(fileATime0: string, fileATime1: string): BlameLine[] {
-  const lines0 = fileATime0.split('\n');
   const lines1 = fileATime1.split('\n');
+  const result: BlameLine[] = [];
 
-  // Keep a frequency map of available lines from time 0
-  const availableLinesTime0 = new Map<string, number>();
-
-  for (const line of lines0) {
-    if (line.trim() === '') continue; // Ignore empty lines
-
-    const currentCount = availableLinesTime0.get(line) || 0;
-    availableLinesTime0.set(line, currentCount + 1);
+  // Fast path: if fileATime0 is empty, all lines in fileATime1 originate from time 1
+  if (!fileATime0 || fileATime0.trim() === '') {
+    for (let i = 0; i < lines1.length; i++) {
+      const line = lines1[i];
+      if (line.trim() !== '') {
+        result.push({ lineContent: line, sourceTime: 1 });
+      }
+    }
+    return result;
   }
 
-  const result: BlameLine[] = [];
-  let currentLineNumber = 1; // 1-indexed
+  const lines0 = fileATime0.split('\n');
+  const availableLinesTime0 = new Map<string, number>();
 
-  for (const line of lines1) {
-    if (line.trim() === '') {
-      // If we ignore empty lines, we just increment the line number and move on
-      currentLineNumber++;
-      continue;
-    }
+  for (let i = 0; i < lines0.length; i++) {
+    const line = lines0[i];
+    if (line.trim() === '') continue; // Ignore empty lines
+    availableLinesTime0.set(line, (availableLinesTime0.get(line) || 0) + 1);
+  }
+
+  for (let i = 0; i < lines1.length; i++) {
+    const line = lines1[i];
+    if (line.trim() === '') continue;
 
     let sourceTime: number = 1; // Default to time 1
 
@@ -53,72 +56,61 @@ export function GitBlame(fileATime0: string, fileATime1: string): BlameLine[] {
     result.push({
       lineContent: line,
       sourceTime,
-      lineNumber: currentLineNumber,
     });
-
-    currentLineNumber++;
   }
 
   return result;
 }
 
-/**
- * Chains a new file version onto an existing blame array.
- * This takes the output of a previous GitBlame or GitBlameChain call
- * and compares it with the next file version in sequence.
- * 
- * @param previousBlame The result from the previous blame operation
- * @param nextTimeFile The content of the file at the new time index
- * @param newTimeIndex Optional explicit time index for new lines. If omitted, it will use max(sourceTime) + 1, or 2.
- * @returns Array of BlameLine objects
- */
 export function GitBlameChain(previousBlame: BlameLine[], nextTimeFile: string, newTimeIndex?: number): BlameLine[] {
   const nextTime = newTimeIndex !== undefined
     ? newTimeIndex
     : (previousBlame.length > 0 ? Math.max(...previousBlame.map(b => b.sourceTime)) + 1 : 2);
 
   const nextLines = nextTimeFile.split('\n');
-
-  // Map to store available source times for each line content
-  const availableLines = new Map<string, number[]>();
-
-  for (const line of previousBlame) {
-    if (line.lineContent.trim() === '') continue;
-
-    if (!availableLines.has(line.lineContent)) {
-      availableLines.set(line.lineContent, []);
-    }
-    availableLines.get(line.lineContent)!.push(line.sourceTime);
-  }
-
-  // Sort so that we consume the oldest origins first
-  for (const times of availableLines.values()) {
-    times.sort((a, b) => a - b);
-  }
-
   const result: BlameLine[] = [];
-  let currentLineNumber = 1;
 
-  for (const line of nextLines) {
-    if (line.trim() === '') {
-      currentLineNumber++;
-      continue;
+  // Fast path: if there is no previous blame state, all lines are from nextTime
+  if (previousBlame.length === 0) {
+    for (let i = 0; i < nextLines.length; i++) {
+      const line = nextLines[i];
+      if (line.trim() !== '') {
+        result.push({ lineContent: line, sourceTime: nextTime });
+      }
     }
+    return result;
+  }
 
-    let sourceTime = nextTime;
+  const nextLineCounts = new Map<string, number>();
 
-    const times = availableLines.get(line);
-    if (times !== undefined && times.length > 0) {
-      sourceTime = times.shift()!;
+  for (let i = 0; i < nextLines.length; i++) {
+    const line = nextLines[i];
+    if (line.trim() === '') continue;
+    nextLineCounts.set(line, (nextLineCounts.get(line) || 0) + 1);
+  }
+
+  // To ensure we keep the oldest source times, we process previousBlame
+  // from oldest to newest. Sort is fast for this array since it's just numbers.
+  const sortedPrevious = [...previousBlame].sort((a, b) => a.sourceTime - b.sourceTime);
+
+  for (let i = 0; i < sortedPrevious.length; i++) {
+    const blame = sortedPrevious[i];
+    if (blame.lineContent.trim() === '') continue;
+    
+    const count = nextLineCounts.get(blame.lineContent);
+    if (count !== undefined && count > 0) {
+      result.push(blame);
+      nextLineCounts.set(blame.lineContent, count - 1);
     }
+  }
 
-    result.push({
-      lineContent: line,
-      sourceTime,
-      lineNumber: currentLineNumber,
-    });
-
-    currentLineNumber++;
+  for (const [lineContent, count] of nextLineCounts.entries()) {
+    for (let i = 0; i < count; i++) {
+      result.push({
+        lineContent,
+        sourceTime: nextTime
+      });
+    }
   }
 
   return result;
