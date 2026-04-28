@@ -1,4 +1,4 @@
-import { FileLinesPreserved, BlameDataPoint } from './GitProcessing';
+import type { FileLinesPreserved, BlameDataPoint } from './GitProcessing';
 
 export interface BlameLine {
   lineContent: string;
