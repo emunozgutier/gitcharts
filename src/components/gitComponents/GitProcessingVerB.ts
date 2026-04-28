@@ -71,8 +71,8 @@ export function GitBlame(fileATime0: string, fileATime1: string): BlameLine[] {
  * @returns Array of BlameLine objects
  */
 export function GitBlameChain(previousBlame: BlameLine[], nextTimeFile: string, newTimeIndex?: number): BlameLine[] {
-  const nextTime = newTimeIndex !== undefined 
-    ? newTimeIndex 
+  const nextTime = newTimeIndex !== undefined
+    ? newTimeIndex
     : (previousBlame.length > 0 ? Math.max(...previousBlame.map(b => b.sourceTime)) + 1 : 2);
 
   const nextLines = nextTimeFile.split('\n');
@@ -82,7 +82,7 @@ export function GitBlameChain(previousBlame: BlameLine[], nextTimeFile: string, 
 
   for (const line of previousBlame) {
     if (line.lineContent.trim() === '') continue;
-    
+
     if (!availableLines.has(line.lineContent)) {
       availableLines.set(line.lineContent, []);
     }
@@ -120,4 +120,34 @@ export function GitBlameChain(previousBlame: BlameLine[], nextTimeFile: string, 
   }
 
   return result;
+}
+function GetFilesLInesThatSurvivedOnEachPeriod(
+  snapshotData: { data: Record<string, FileLinesPreserved[]> }
+): BlameDataPoint[] {
+  const { data } = snapshotData;
+  const dateKeys = Object.keys(data).sort();
+  const results: BlameDataPoint[] = [];
+
+  // For each snapshot J, we find where its lines came from by checking 0 to J-1
+  for (let j = 0; j < dateKeys.length; j++) {
+    const currentDate = dateKeys[j];
+    const currentFileList = data[currentDate];
+
+    if (!currentFileList) continue;
+
+    const counts: Record<string, number> = {};
+    const fileBreakdown: Record<string, Record<string, number>> = {};
+
+    // Initialize counts for all dates (periods) seen up to now to 0
+    for (let k = 0; k <= j; k++) {
+      counts[dateKeys[k]] = 0;
+      fileBreakdown[dateKeys[k]] = {};
+    }
+
+    for (const currentFile of currentFileList) {
+          ...
+    }
+  }
+
+  return results.sort((a, b) => a.commit_date.localeCompare(b.commit_date));
 }
