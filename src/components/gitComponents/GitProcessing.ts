@@ -98,7 +98,6 @@ export class GitArchaeology {
       startDate?: string;
       endDate?: string;
       granularity?: GranularityUnit;
-      onPartialSnapshotData?: (snapshotData: { data: Record<string, FileLinesPreserved[]> }, timePoints: number[]) => void;
     }
   ): Promise<{ data: Record<string, FileLinesPreserved[]>; timePoints: number[] }> {
     if (!options?.skipClone) {
@@ -149,7 +148,6 @@ export class GitArchaeology {
     let previousResult: FileLinesPreserved[] | null = null;
     let previousCommitHash: string | null = null;
     let previousDate: string | null = null;
-    let lastPartialUpdateTs = Date.now();
 
     for (let i = 0; i < timePoints.length; i++) {
       const snapshotTs = timePoints[i];
@@ -171,12 +169,6 @@ export class GitArchaeology {
         data[date0] = previousResult;
         previousDate = date0;
 
-        const now = Date.now();
-        if (options?.onPartialSnapshotData && (now - lastPartialUpdateTs > 3000)) {
-          lastPartialUpdateTs = now;
-          options.onPartialSnapshotData({ data }, timePoints);
-          await new Promise(r => setTimeout(r, 0));
-        }
         continue;
       }
 
@@ -251,28 +243,12 @@ export class GitArchaeology {
         if (onProgress) {
           onProgress(`Processing SNAPSHOT ${date0} (${i + 1}/${timePoints.length}) - Files: ${processedFiles}/${totalFiles}...`);
         }
-
-        // Yield partial data during long file loops
-        const loopNow = Date.now();
-        if (options?.onPartialSnapshotData && (loopNow - lastPartialUpdateTs > 5000)) {
-          lastPartialUpdateTs = loopNow;
-          data[date0] = currentFileList;
-          options.onPartialSnapshotData({ data }, timePoints);
-          await new Promise(r => setTimeout(r, 0));
-        }
       }
 
       data[date0] = currentFileList;
       previousResult = currentFileList;
       previousCommitHash = commit.oid;
       previousDate = date0;
-
-      // Always update the chart when a snapshot finishes, and reset the 5-second timer
-      if (options?.onPartialSnapshotData) {
-        lastPartialUpdateTs = Date.now();
-        options.onPartialSnapshotData({ data }, timePoints);
-        await new Promise(r => setTimeout(r, 0));
-      }
     }
 
     return { data, timePoints };
@@ -293,14 +269,9 @@ export class GitArchaeology {
     onPartialData?: (data: BlameDataPoint[], timePoints: number[]) => void
   ): Promise<BlameDataPoint[]> {
 
-    const snapshotData = await this.GetFileLinesPerPeriod(onProgress, {
-      ...options,
-      onPartialSnapshotData: onPartialData ? (partialData, timePoints) => {
-        onPartialData(GetFilesLInesThatSurvivedOnEachPeriod(partialData), timePoints);
-      } : undefined
-    });
+    const snapshotData = await this.GetFileLinesPerPeriod(onProgress, options);
 
-    return GetFilesLInesThatSurvivedOnEachPeriod(snapshotData);
+    return await GetFilesLInesThatSurvivedOnEachPeriod(snapshotData, onPartialData, snapshotData.timePoints);
   }
 
 }

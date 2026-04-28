@@ -123,12 +123,16 @@ export function GitBlameChain(previousBlame: BlameLine[], nextTimeFile: string, 
 
   return result;
 }
-export function GetFilesLInesThatSurvivedOnEachPeriod(
-  snapshotData: { data: Record<string, FileLinesPreserved[]> }
-): BlameDataPoint[] {
+export async function GetFilesLInesThatSurvivedOnEachPeriod(
+  snapshotData: { data: Record<string, FileLinesPreserved[]> },
+  onPartialData?: (data: BlameDataPoint[], timePoints: number[]) => void,
+  timePoints?: number[]
+): Promise<BlameDataPoint[]> {
   const { data } = snapshotData;
   const dateKeys = Object.keys(data).sort();
   const results: BlameDataPoint[] = [];
+
+  let lastUpdateTs = Date.now();
 
   // Map to maintain the blame state for each file across snapshots
   // filename -> BlameLine[]
@@ -182,6 +186,15 @@ export function GetFilesLInesThatSurvivedOnEachPeriod(
         line_count: count,
         files: fileBreakdown[period]
       });
+    }
+
+    if (onPartialData && timePoints) {
+      const now = Date.now();
+      if (now - lastUpdateTs > 200 || j === dateKeys.length - 1) {
+        lastUpdateTs = now;
+        onPartialData([...results].sort((a, b) => a.commit_date.localeCompare(b.commit_date)), timePoints);
+        await new Promise(resolve => setTimeout(resolve, 0));
+      }
     }
   }
 
