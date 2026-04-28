@@ -14,7 +14,7 @@ import {
 } from './GitDownload';
 
 import { isCodeFile } from './GitScan';
-import { GetFilesLInesThatSurvivedOnEachPeriod } from './GitProcessingVerB';
+import { GitBlameAnalyzer } from './GitProcessingVerB';
 
 // ── Public types ──────────────────────────────────────────────────────────────
 
@@ -98,6 +98,7 @@ export class GitArchaeology {
       startDate?: string;
       endDate?: string;
       granularity?: GranularityUnit;
+      onSnapshotLoaded?: (date0: string, currentFileList: FileLinesPreserved[], timePoints: number[]) => Promise<void>;
     }
   ): Promise<{ data: Record<string, FileLinesPreserved[]>; timePoints: number[] }> {
     if (!options?.skipClone) {
@@ -159,6 +160,9 @@ export class GitArchaeology {
       if (!commit) {
         // No commits yet at this time point
         data[date0] = [];
+        if (options?.onSnapshotLoaded) {
+          await options.onSnapshotLoaded(date0, [], timePoints);
+        }
         continue;
       }
 
@@ -169,6 +173,9 @@ export class GitArchaeology {
         data[date0] = previousResult;
         previousDate = date0;
 
+        if (options?.onSnapshotLoaded) {
+          await options.onSnapshotLoaded(date0, previousResult, timePoints);
+        }
         continue;
       }
 
@@ -249,6 +256,10 @@ export class GitArchaeology {
       previousResult = currentFileList;
       previousCommitHash = commit.oid;
       previousDate = date0;
+
+      if (options?.onSnapshotLoaded) {
+        await options.onSnapshotLoaded(date0, currentFileList, timePoints);
+      }
     }
 
     return { data, timePoints };
@@ -269,9 +280,25 @@ export class GitArchaeology {
     onPartialData?: (data: BlameDataPoint[], timePoints: number[]) => void
   ): Promise<BlameDataPoint[]> {
 
-    const snapshotData = await this.GetFileLinesPerPeriod(onProgress, options);
+    const analyzer = new GitBlameAnalyzer();
+    let lastUpdateTs = Date.now();
 
-    return await GetFilesLInesThatSurvivedOnEachPeriod(snapshotData, onPartialData, snapshotData.timePoints);
+    await this.GetFileLinesPerPeriod(onProgress, {
+      ...options,
+      onSnapshotLoaded: async (date0, currentFileList, timePoints) => {
+        analyzer.processSnapshot(date0, currentFileList);
+        if (onPartialData) {
+          const now = Date.now();
+          if (now - lastUpdateTs > 200 || date0 === toDateStr(timePoints[timePoints.length - 1])) {
+            lastUpdateTs = now;
+            onPartialData(analyzer.getResults(), timePoints);
+            await new Promise(resolve => setTimeout(resolve, 0));
+          }
+        }
+      }
+    });
+
+    return analyzer.getResults();
   }
 
 }

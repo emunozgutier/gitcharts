@@ -123,6 +123,61 @@ export function GitBlameChain(previousBlame: BlameLine[], nextTimeFile: string, 
 
   return result;
 }
+
+export class GitBlameAnalyzer {
+  private fileBlameStates = new Map<string, BlameLine[]>();
+  private dateKeys: string[] = [];
+  private results: BlameDataPoint[] = [];
+
+  public processSnapshot(currentDate: string, currentFileList: FileLinesPreserved[]) {
+    this.dateKeys.push(currentDate);
+    const counts: Record<string, number> = {};
+    const fileBreakdown: Record<string, Record<string, number>> = {};
+
+    for (const date of this.dateKeys) {
+      counts[date] = 0;
+      fileBreakdown[date] = {};
+    }
+
+    for (const currentFile of currentFileList) {
+      if (currentFile.filelines.length === 0) continue;
+
+      const previousBlame = this.fileBlameStates.get(currentFile.filename) || [];
+      const currentContent = currentFile.filelines.join('\n');
+      
+      const newTimeIndex = this.dateKeys.length - 1;
+      const newBlame = GitBlameChain(previousBlame, currentContent, newTimeIndex);
+      this.fileBlameStates.set(currentFile.filename, newBlame);
+
+      for (const line of newBlame) {
+        if (line.lineContent.trim() === '') continue;
+        
+        const sourceDate = this.dateKeys[line.sourceTime];
+        counts[sourceDate] = (counts[sourceDate] || 0) + 1;
+        
+        if (!fileBreakdown[sourceDate][currentFile.filename]) {
+            fileBreakdown[sourceDate][currentFile.filename] = 0;
+        }
+        fileBreakdown[sourceDate][currentFile.filename]++;
+      }
+    }
+
+    for (const period of Object.keys(counts)) {
+      const count = counts[period];
+      this.results.push({
+        commit_date: currentDate,
+        period,
+        line_count: count,
+        files: fileBreakdown[period]
+      });
+    }
+  }
+
+  public getResults(): BlameDataPoint[] {
+    return [...this.results].sort((a, b) => a.commit_date.localeCompare(b.commit_date));
+  }
+}
+
 export async function GetFilesLInesThatSurvivedOnEachPeriod(
   snapshotData: { data: Record<string, FileLinesPreserved[]> },
   onPartialData?: (data: BlameDataPoint[], timePoints: number[]) => void,
