@@ -1,3 +1,5 @@
+import { FileLinesPreserved, BlameDataPoint } from './GitProcessing';
+
 export interface BlameLine {
   lineContent: string;
   sourceTime: number;
@@ -121,14 +123,18 @@ export function GitBlameChain(previousBlame: BlameLine[], nextTimeFile: string, 
 
   return result;
 }
-function GetFilesLInesThatSurvivedOnEachPeriod(
+export function GetFilesLInesThatSurvivedOnEachPeriod(
   snapshotData: { data: Record<string, FileLinesPreserved[]> }
 ): BlameDataPoint[] {
   const { data } = snapshotData;
   const dateKeys = Object.keys(data).sort();
   const results: BlameDataPoint[] = [];
 
-  // For each snapshot J, we find where its lines came from by checking 0 to J-1
+  // Map to maintain the blame state for each file across snapshots
+  // filename -> BlameLine[]
+  const fileBlameStates = new Map<string, BlameLine[]>();
+
+  // For each snapshot J, we update the blame state for all its files
   for (let j = 0; j < dateKeys.length; j++) {
     const currentDate = dateKeys[j];
     const currentFileList = data[currentDate];
@@ -144,8 +150,38 @@ function GetFilesLInesThatSurvivedOnEachPeriod(
       fileBreakdown[dateKeys[k]] = {};
     }
 
+    // Update state for all files present in the current snapshot
     for (const currentFile of currentFileList) {
-          ...
+      if (currentFile.filelines.length === 0) continue;
+
+      const previousBlame = fileBlameStates.get(currentFile.filename) || [];
+      const currentContent = currentFile.filelines.join('\n');
+      
+      const newBlame = GitBlameChain(previousBlame, currentContent, j);
+      fileBlameStates.set(currentFile.filename, newBlame);
+
+      // Aggregate the sourceTimes from newBlame
+      for (const line of newBlame) {
+        if (line.lineContent.trim() === '') continue;
+        
+        const sourceDate = dateKeys[line.sourceTime];
+        counts[sourceDate] = (counts[sourceDate] || 0) + 1;
+        
+        if (!fileBreakdown[sourceDate][currentFile.filename]) {
+            fileBreakdown[sourceDate][currentFile.filename] = 0;
+        }
+        fileBreakdown[sourceDate][currentFile.filename]++;
+      }
+    }
+
+    for (const period of Object.keys(counts)) {
+      const count = counts[period];
+      results.push({
+        commit_date: currentDate,
+        period,
+        line_count: count,
+        files: fileBreakdown[period]
+      });
     }
   }
 
