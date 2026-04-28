@@ -14,7 +14,7 @@ import {
 } from './GitDownload';
 
 import { isCodeFile } from './GitScan';
-
+import { GetFilesLInesThatSurvivedOnEachPeriod } from './GitProcessingVerB';
 
 // ── Public types ──────────────────────────────────────────────────────────────
 
@@ -278,108 +278,6 @@ export class GitArchaeology {
     return { data, timePoints };
   }
 
-  private GetLinesThatSurvived(fileBefore: FileLinesPreserved, fileAfter: FileLinesPreserved): [number, FileLinesPreserved] {
-    const poolCounts: Record<string, number> = {};
-    for (const line of fileBefore.filelines) {
-      poolCounts[line] = (poolCounts[line] || 0) + 1;
-    }
-
-    let survivingCount = 0;
-    const notFoundLines: string[] = [];
-
-    for (const line of fileAfter.filelines) {
-      if (poolCounts[line] > 0) {
-        survivingCount++;
-        poolCounts[line]--;
-      } else {
-        notFoundLines.push(line);
-      }
-    }
-
-    return [
-      survivingCount,
-      {
-        filename: fileAfter.filename,
-        filelines: notFoundLines
-      }
-    ];
-  }
-
-  private GetFilesLInesThatSurvivedOnEachPeriod(
-    snapshotData: { data: Record<string, FileLinesPreserved[]> }
-  ): BlameDataPoint[] {
-    const { data } = snapshotData;
-    const dateKeys = Object.keys(data).sort();
-    const results: BlameDataPoint[] = [];
-
-    // For each snapshot J, we find where its lines came from by checking 0 to J-1
-    for (let j = 0; j < dateKeys.length; j++) {
-      const currentDate = dateKeys[j];
-      const currentFileList = data[currentDate];
-
-      if (!currentFileList) continue;
-
-      const counts: Record<string, number> = {};
-      const fileBreakdown: Record<string, Record<string, number>> = {};
-
-      // Initialize counts for all dates (periods) seen up to now to 0
-      for (let k = 0; k <= j; k++) {
-        counts[dateKeys[k]] = 0;
-        fileBreakdown[dateKeys[k]] = {};
-      }
-
-      for (const currentFile of currentFileList) {
-        if (currentFile.filelines.length === 0) continue;
-
-        let fileToProcess = { ...currentFile, filelines: [...currentFile.filelines] };
-
-        // Check against ALL previous snapshots in order
-        for (let i = 0; i < j; i++) {
-          const prevDate = dateKeys[i];
-          const prevFileList = data[prevDate];
-
-          // Find file in previous snapshot
-          let prevFile: FileLinesPreserved | undefined;
-          if (prevFileList) {
-            for (const f of prevFileList) {
-              if (f.filename === fileToProcess.filename) {
-                prevFile = f;
-                break;
-              }
-            }
-          }
-
-          if (prevFile && fileToProcess.filelines.length > 0) {
-            const [countUpdate, remainingFile] = this.GetLinesThatSurvived(prevFile, fileToProcess);
-            counts[prevDate] += countUpdate;
-            if (countUpdate > 0) {
-              fileBreakdown[prevDate][currentFile.filename] = countUpdate;
-            }
-            fileToProcess = remainingFile;
-          }
-        }
-
-        // Finally, any lines that never appeared in any previous batch
-        // are attributed to the current batch
-        counts[currentDate] += fileToProcess.filelines.length;
-        if (fileToProcess.filelines.length > 0) {
-          fileBreakdown[currentDate][currentFile.filename] = fileToProcess.filelines.length;
-        }
-      }
-
-      for (const period of Object.keys(counts)) {
-        const count = counts[period];
-        results.push({
-          commit_date: currentDate,
-          period,
-          line_count: count,
-          files: fileBreakdown[period]
-        });
-      }
-    }
-
-    return results.sort((a, b) => a.commit_date.localeCompare(b.commit_date));
-  }
 
   async run(
     onProgress?: (progress: string) => void,
@@ -398,11 +296,11 @@ export class GitArchaeology {
     const snapshotData = await this.GetFileLinesPerPeriod(onProgress, {
       ...options,
       onPartialSnapshotData: onPartialData ? (partialData, timePoints) => {
-        onPartialData(this.GetFilesLInesThatSurvivedOnEachPeriod(partialData), timePoints);
+        onPartialData(GetFilesLInesThatSurvivedOnEachPeriod(partialData), timePoints);
       } : undefined
     });
 
-    return this.GetFilesLInesThatSurvivedOnEachPeriod(snapshotData);
+    return GetFilesLInesThatSurvivedOnEachPeriod(snapshotData);
   }
 
 }
