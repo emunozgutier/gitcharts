@@ -5,6 +5,7 @@ import { cloneRepo } from './gitComponents/GitDownload';
 import Chart from './Chart';
 import Settings from './Settings';
 import { useStore } from '../store/useStore';
+import { GitScan } from './gitComponents/GitScan';
 
 import ProgressStateAndBar from './ProgressStateAndBar';
 
@@ -66,7 +67,7 @@ const MainPage: React.FC<MainPageProps> = ({
       });
       
       setProgress("Scanning repository structure...");
-      const info = await archaeology.scanRepo();
+      const info = await GitScan(archaeology.dir);
       setRepoInfo(info);
       setState('selected repo name');
       setProgress(null);
