@@ -394,15 +394,7 @@ export class GitArchaeology {
     },
     onPartialData?: (data: BlameDataPoint[], timePoints: number[]) => void
   ): Promise<BlameDataPoint[]> {
-    const snapshotData = await this.GetFileLinesPerPeriod(onProgress, {
-        ...options,
-        onPartialSnapshotData: (partialSnapshot, timePoints) => {
-            if (onPartialData) {
-                const partialBlame = this.GetFilesLInesThatSurvivedOnEachPeriod(partialSnapshot);
-                onPartialData(partialBlame, timePoints);
-            }
-        }
-    });
+
     return this.GetFilesLInesThatSurvivedOnEachPeriod(snapshotData);
   }
 
