@@ -110,7 +110,7 @@ export class GitArchaeology {
       });
     }
 
-    const requestedPoints = options?.depth || 50;
+    const requestedPoints = options?.depth || 8;
     const fetchDepth = Math.max(2000, requestedPoints * 2);
 
     // Clear the tree cache at the start of a run to prevent memory leaks

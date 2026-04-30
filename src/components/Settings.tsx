@@ -23,7 +23,7 @@ const Settings: React.FC<SettingsProps> = ({ extensions, folders, folderLines, t
   const [selectedExtensions, setSelectedExtensions] = useState<string[]>([]);
   const [selectedFolders, setSelectedFolders] = useState<string[]>([]);
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set(['.']));
-  const [depth, setDepth] = useState<number>(50);
+  const [depth, setDepth] = useState<number>(8);
   
   const [minVal, setMinVal] = useState(timeRange.min);
   const [maxVal, setMaxVal] = useState(timeRange.max);

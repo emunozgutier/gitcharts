@@ -16,6 +16,20 @@ export interface BlameLine {
  * @returns Array of BlameLine objects
  */
 export function GitBlame(fileATime0: string, fileATime1: string): BlameLine[] {
+  // Fast path: equivalent to a super fast crc/hash check for identical files.
+  // If the contents match perfectly, there was no change and all lines came from time 0.
+  if (fileATime0 === fileATime1) {
+    const lines1 = fileATime1.split('\n');
+    const result: BlameLine[] = [];
+    for (let i = 0; i < lines1.length; i++) {
+      const line = lines1[i];
+      if (line.trim() !== '') {
+        result.push({ lineContent: line, sourceTime: 0 });
+      }
+    }
+    return result;
+  }
+
   const lines1 = fileATime1.split('\n');
   const result: BlameLine[] = [];
 
